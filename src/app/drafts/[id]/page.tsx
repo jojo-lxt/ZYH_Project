@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { DraftReview } from "@/features/drafts/components/DraftReview";
+import { XhsMiniProgramBridge } from "@/features/drafts/components/XhsMiniProgramBridge";
 import { getDraft } from "@/server/drafts/draftStore";
 
 export default async function DraftPage({
@@ -17,5 +17,5 @@ export default async function DraftPage({
     notFound();
   }
 
-  return <DraftReview draft={draft} />;
+  return <XhsMiniProgramBridge draft={draft} />;
 }

@@ -196,7 +196,7 @@ export function DraftCreator() {
       <section className="work-panel result-panel">
         <div className="panel-heading">
           <p className="panel-kicker">二维码</p>
-          <h2>扫码确认</h2>
+          <h2>扫码进入小程序</h2>
         </div>
 
         {draft && draftUrl ? (
@@ -229,7 +229,7 @@ export function DraftCreator() {
 
             <Space wrap>
               <Button href={draftUrl} target="_blank">
-                打开草稿
+                打开小程序中转页
               </Button>
               <Button onClick={copyDraftUrl}>复制链接</Button>
             </Space>

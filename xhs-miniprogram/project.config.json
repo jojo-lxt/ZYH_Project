@@ -1,0 +1,6 @@
+{
+  "appid": "replace-with-xhs-mini-program-appid",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "./",
+  "projectname": "xhs-draft-publisher"
+}

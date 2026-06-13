@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/draft/index"
+  ],
+  "window": {
+    "backgroundColor": "#f7f5f1",
+    "navigationBarBackgroundColor": "#f7f5f1",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "小红书草稿"
+  }
+}

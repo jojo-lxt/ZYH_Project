@@ -1,0 +1,41 @@
+<view class="page">
+  <view class="header">
+    <text class="kicker">小红书草稿</text>
+    <text class="title">确认内容</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="state-card">正在加载草稿...</view>
+  <view wx:elif="{{error}}" class="state-card error">{{error}}</view>
+
+  <block wx:else>
+    <view class="image-grid">
+      <view wx:for="{{draft.selectedImages}}" wx:key="id" class="image-card">
+        <image mode="aspectFill" src="{{item.absoluteUrl}}" />
+        <text>{{index + 1}}</text>
+      </view>
+    </view>
+
+    <view class="panel">
+      <view class="panel-head">
+        <text>文案</text>
+        <button bindtap="copyCaption" size="mini">复制</button>
+      </view>
+      <textarea auto-height disabled value="{{draft.caption}}" />
+    </view>
+
+    <view class="panel">
+      <view class="panel-head">
+        <text>话题</text>
+      </view>
+      <view class="tag-row">
+        <text wx:for="{{draft.tags}}" wx:key="*this" class="tag">#{{item}}</text>
+      </view>
+    </view>
+
+    <view class="footer">
+      <button bindtap="openPublisher" class="primary" loading="{{publishing}}">
+        打开小红书发布页
+      </button>
+    </view>
+  </block>
+</view>

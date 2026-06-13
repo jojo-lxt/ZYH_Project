@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   AppstoreOutlined,
   BarChartOutlined,
@@ -20,7 +20,11 @@ import {
   UserOutlined,
   VideoCameraOutlined,
 } from "@ant-design/icons";
-import { Button, Dropdown, Layout, Menu, Select, Space, type MenuProps } from "antd";
+import { App, Button, Dropdown, Layout, Menu, Select, Space, type MenuProps } from "antd";
+import {
+  clearAuthSession,
+  hasAuthSession,
+} from "@/features/auth/lib/session";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   selectConsoleCurrentProject,
@@ -70,12 +74,34 @@ function getTopSelectedKey(pathname: string) {
 }
 
 export function ConsoleShell({ children }: ConsoleShellProps) {
+  const { message } = App.useApp();
   const currentProject = useAppSelector(selectConsoleCurrentProject);
   const currentUser = useAppSelector(selectConsoleCurrentUser);
   const dispatch = useAppDispatch();
   const pathname = usePathname();
+  const router = useRouter();
   const isMaterialsRoute = pathname.startsWith("/materials");
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [openKeys, setOpenKeys] = useState(["module", "config"]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!hasAuthSession()) {
+        router.replace("/login");
+        return;
+      }
+
+      setIsCheckingAuth(false);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, [router]);
+
+  function logout() {
+    clearAuthSession();
+    message.success("已退出登录");
+    router.replace("/login");
+  }
 
   const sideItems: MenuProps["items"] = [
     {
@@ -139,6 +165,14 @@ export function ConsoleShell({ children }: ConsoleShellProps) {
     },
   ];
 
+  if (isCheckingAuth) {
+    return (
+      <div className="console-auth-loading">
+        <span>正在验证登录状态...</span>
+      </div>
+    );
+  }
+
   return (
     <Layout className="console-shell">
       <Sider className="console-sidebar" theme="light" width={244}>
@@ -182,6 +216,11 @@ export function ConsoleShell({ children }: ConsoleShellProps) {
           <Dropdown
             menu={{
               items: userItems,
+              onClick: ({ key }) => {
+                if (key === "logout") {
+                  logout();
+                }
+              },
             }}
             placement="bottomRight"
             trigger={["click"]}
