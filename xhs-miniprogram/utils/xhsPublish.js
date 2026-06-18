@@ -29,15 +29,15 @@ async function openXhsDraftPublisher(draft) {
   const platform = getPlatform();
   const payload = buildPublishPayload(draft);
 
-  if (platform?.openXhsPublish) {
+  if (platform && platform.openXhsPublish) {
     return platform.openXhsPublish(payload);
   }
 
-  if (platform?.openNotePublish) {
+  if (platform && platform.openNotePublish) {
     return platform.openNotePublish(payload);
   }
 
-  if (platform?.publishNote) {
+  if (platform && platform.publishNote) {
     return platform.publishNote(payload);
   }
 

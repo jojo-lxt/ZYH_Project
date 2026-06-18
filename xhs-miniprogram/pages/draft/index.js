@@ -4,6 +4,7 @@ const {
   setClipboardData,
   showToast,
 } = require("../../utils/platform");
+const { getMockDraft } = require("../../utils/mockDraft");
 const { openXhsDraftPublisher } = require("../../utils/xhsPublish");
 
 function trimSlash(value) {
@@ -12,6 +13,10 @@ function trimSlash(value) {
 
 function normalizeUrl(url, baseUrl) {
   if (/^https?:\/\//.test(url)) {
+    return url;
+  }
+
+  if (!baseUrl || url.startsWith("/assets/")) {
     return url;
   }
 
@@ -32,7 +37,7 @@ function getDraftApiUrl(options) {
   return `${trimSlash(API_BASE_URL)}/api/drafts/${draftId}`;
 }
 
-function withAbsoluteImageUrls(draft, apiBaseUrl) {
+function withDisplayImageUrls(draft, apiBaseUrl = "") {
   const addAbsoluteUrl = (image) => ({
     ...image,
     absoluteUrl: normalizeUrl(image.url, apiBaseUrl),
@@ -63,10 +68,7 @@ Page({
     const apiUrl = getDraftApiUrl(options);
 
     if (!apiUrl) {
-      this.setData({
-        error: "缺少草稿参数",
-        loading: false,
-      });
+      this.showDraft(getMockDraft());
       return;
     }
 
@@ -82,14 +84,7 @@ Page({
       }
 
       const apiBaseUrl = apiUrl.replace(/\/api\/drafts\/[^/]+$/, "");
-      const draft = withAbsoluteImageUrls(payload.draft, apiBaseUrl);
-
-      this.setData({
-        currentImage: draft.selectedImages[0] || null,
-        currentImageIndex: 0,
-        draft,
-        loading: false,
-      });
+      this.showDraft(payload.draft, apiBaseUrl);
     } catch (error) {
       this.setData({
         error: error.message || "加载草稿失败",
@@ -98,9 +93,22 @@ Page({
     }
   },
 
+  showDraft(rawDraft, apiBaseUrl = "") {
+    const draft = withDisplayImageUrls(rawDraft, apiBaseUrl);
+
+    this.setData({
+      currentImage: draft.selectedImages[0] || null,
+      currentImageIndex: 0,
+      draft,
+      error: "",
+      loading: false,
+    });
+  },
+
   selectImage(event) {
     const index = Number(event.currentTarget.dataset.index);
-    const currentImage = this.data.draft?.selectedImages[index];
+    const currentImage =
+      this.data.draft && this.data.draft.selectedImages[index];
 
     if (!currentImage) {
       return;
@@ -113,7 +121,7 @@ Page({
   },
 
   async copyCaption() {
-    if (!this.data.draft?.caption) {
+    if (!this.data.draft || !this.data.draft.caption) {
       return;
     }
 
