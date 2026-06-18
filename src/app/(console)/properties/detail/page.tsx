@@ -1,4 +1,4 @@
-import { PropertyDetailPage } from "@/features/console/components/ConsolePages";
+import { PropertyDetailPage } from "@/features/console/properties/PropertyPages";
 
 export default function PropertyDetailRoutePage() {
   return <PropertyDetailPage />;

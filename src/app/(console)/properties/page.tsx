@@ -1,4 +1,4 @@
-import { PropertyManagementPage } from "@/features/console/components/ConsolePages";
+import { PropertyManagementPage } from "@/features/console/properties/PropertyPages";
 
 export default function PropertiesPage() {
   return <PropertyManagementPage />;

@@ -127,6 +127,13 @@ function setConfigTree(state: ConsoleState, kind: ConfigKind, tree: ConfigTreeIt
   }
 }
 
+function formatMaterialUpdatedAt() {
+  const date = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
 const initialState: ConsoleState = {
   currentProject: "张江金茂府",
   currentUser: {
@@ -240,16 +247,24 @@ const consoleSlice = createSlice({
         updateConfigTreeItem(tree, action.payload.id, action.payload.patch),
       );
     },
-    updateMaterialCategory: (
+    updateMaterialTypeConfig: (
       state,
       action: PayloadAction<{
         category: string;
         id: number;
+        platforms: string[];
+        stage: string;
       }>,
     ) => {
       state.materials = state.materials.map((material) =>
         material.id === action.payload.id
-          ? { ...material, category: action.payload.category }
+          ? {
+            ...material,
+            category: action.payload.category,
+            platforms: action.payload.platforms,
+            stage: action.payload.stage,
+            updatedAt: formatMaterialUpdatedAt(),
+          }
           : material,
       );
     },
@@ -288,7 +303,7 @@ export const {
   setCurrentProject,
   setMaterialTags,
   updateConfigItem,
-  updateMaterialCategory,
+  updateMaterialTypeConfig,
   upsertProperty,
   upsertUser,
 } = consoleSlice.actions;

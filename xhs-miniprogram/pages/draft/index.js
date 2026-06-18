@@ -32,8 +32,23 @@ function getDraftApiUrl(options) {
   return `${trimSlash(API_BASE_URL)}/api/drafts/${draftId}`;
 }
 
+function withAbsoluteImageUrls(draft, apiBaseUrl) {
+  const addAbsoluteUrl = (image) => ({
+    ...image,
+    absoluteUrl: normalizeUrl(image.url, apiBaseUrl),
+  });
+
+  return {
+    ...draft,
+    images: draft.images.map(addAbsoluteUrl),
+    selectedImages: draft.selectedImages.map(addAbsoluteUrl),
+  };
+}
+
 Page({
   data: {
+    currentImage: null,
+    currentImageIndex: 0,
     draft: null,
     error: "",
     loading: true,
@@ -67,19 +82,11 @@ Page({
       }
 
       const apiBaseUrl = apiUrl.replace(/\/api\/drafts\/[^/]+$/, "");
-      const draft = {
-        ...payload.draft,
-        images: payload.draft.images.map((image) => ({
-          ...image,
-          absoluteUrl: normalizeUrl(image.url, apiBaseUrl),
-        })),
-        selectedImages: payload.draft.selectedImages.map((image) => ({
-          ...image,
-          absoluteUrl: normalizeUrl(image.url, apiBaseUrl),
-        })),
-      };
+      const draft = withAbsoluteImageUrls(payload.draft, apiBaseUrl);
 
       this.setData({
+        currentImage: draft.selectedImages[0] || null,
+        currentImageIndex: 0,
         draft,
         loading: false,
       });
@@ -89,6 +96,20 @@ Page({
         loading: false,
       });
     }
+  },
+
+  selectImage(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const currentImage = this.data.draft?.selectedImages[index];
+
+    if (!currentImage) {
+      return;
+    }
+
+    this.setData({
+      currentImage,
+      currentImageIndex: index,
+    });
   },
 
   async copyCaption() {

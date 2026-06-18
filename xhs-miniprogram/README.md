@@ -1,25 +1,32 @@
-# 小红书小程序草稿确认页
+# 小红书小程序
 
-这是一份独立的小程序源码骨架，用于承接网页二维码跳转后的草稿确认流程。
+这是一份独立的小红书小程序源码，用于接收 H5 中间页传入的草稿参数，在小程序内展示图片、文案和话题，并将确认后的内容交给小红书发布能力。
+
+原生小红书小程序页面使用 `.xhsml` 描述结构、`.xhss` 描述样式，页面逻辑和配置仍使用 `.js` / `.json`。
 
 ## 流程
 
-1. H5 二维码打开 `/drafts/[id]`。
-2. `/drafts/[id]` 使用 `NEXT_PUBLIC_XHS_MINI_PROGRAM_URL` 打开小红书小程序。
-3. 小程序页面从 query 获取 `draftId` 或 `apiUrl`。
-4. 小程序请求 Next 后端 `/api/drafts/[id]`。
-5. 用户确认内容后点击“打开小红书发布页”。
-6. `utils/xhsPublish.js` 调用小红书开放平台发布能力。
+1. H5 中间页打开小红书小程序。
+2. 小程序从 query 获取 `draftId` 或 `apiUrl`。
+3. 小程序请求草稿接口，接口需返回图片、文案、话题等内容。
+4. 用户确认内容后点击“发小红书”。
+5. `utils/xhsPublish.js` 调用小红书开放平台发布能力。
 
 ## 配置
 
-先修改 `utils/config.js`：
+`utils/config.js` 只用于缺省接口地址：
 
 ```js
 const API_BASE_URL = "https://your-domain.example.com";
 ```
 
-后台 H5 配置：
+如果 H5 中间页跳转小程序时传入了 `apiUrl`，小程序会优先使用 `apiUrl`。否则会请求：
+
+```text
+${API_BASE_URL}/api/drafts/${draftId}
+```
+
+H5 中间页的小红书跳转模板示例：
 
 ```bash
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsmini://draft?draftId={draftId}&apiUrl={apiUrl}"

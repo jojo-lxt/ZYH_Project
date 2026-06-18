@@ -1,0 +1,42 @@
+<view class="page">
+  <view xhs:if="{{loading}}" class="state-card">正在加载草稿...</view>
+  <view xhs:elif="{{error}}" class="state-card error">{{error}}</view>
+
+  <block xhs:else>
+    <view class="preview-stage">
+      <image xhs:if="{{currentImage}}" mode="aspectFill" src="{{currentImage.absoluteUrl}}" />
+    </view>
+
+    <scroll-view class="thumb-strip" scroll-x>
+      <view
+        xhs:for="{{draft.selectedImages}}"
+        xhs:key="id"
+        class="{{index === currentImageIndex ? 'thumb active' : 'thumb'}}"
+        data-index="{{index}}"
+        bindtap="selectImage"
+      >
+        <image mode="aspectFill" src="{{item.absoluteUrl}}" />
+      </view>
+    </scroll-view>
+
+    <view class="result-head">
+      <text>生成结果预览</text>
+      <button bindtap="copyCaption" size="mini">复制</button>
+    </view>
+
+    <view class="caption-card">
+      <textarea auto-height disabled value="{{draft.caption}}" />
+      <view class="tag-row">
+        <text xhs:for="{{draft.tags}}" xhs:key="*this" class="tag">#{{item}}</text>
+      </view>
+    </view>
+
+    <button class="secondary-action" bindtap="copyCaption">复制文案</button>
+
+    <view class="footer">
+      <button bindtap="openPublisher" class="primary" loading="{{publishing}}">
+        + 发小红书
+      </button>
+    </view>
+  </block>
+</view>

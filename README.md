@@ -1,6 +1,6 @@
-# 内容中台前端原型
+# 内容发布控制台
 
-这是一个基于 Next.js App Router 的内容中台项目，当前已包含控制台页面、素材上传生成草稿二维码流程，以及暂时使用固定假数据的后端 API。
+这是一个基于 Next.js App Router 的内容发布控制台，包含后台管理页面、素材管理、发布平台选择中间页，以及供小程序读取草稿内容的 API。
 
 ## 开发命令
 
@@ -17,10 +17,15 @@ src/
   app/                    Next.js 路由、布局和 API route handlers
     (console)/            控制台前端页面路由组，不影响 URL
     api/                  后端 API 入口
-    drafts/[id]/          手机扫码后的草稿确认页
+    drafts/[id]/          手机扫码后的平台选择中间页
   features/               前端业务模块
-    console/              控制台页面组件和前端请求 hook
-    drafts/               图片上传、二维码、草稿确认组件
+    console/
+      materials/          图片素材、标签配置、卖点配置、图片上传
+      overview/           数据看板
+      properties/         项目和用户管理
+      video/              视频上传占位页
+      components/         控制台外壳和导航
+    drafts/               发布平台选择中间页
   server/                 后端服务层
     console/              控制台接口服务，目前返回固定假数据
     drafts/               草稿生成和本地文件存储逻辑

@@ -1,7 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   ConsoleConfigResponse,
-  ConsoleMaterialsResponse,
   ConsoleOverviewResponse,
   ConsolePropertiesResponse,
   ConsolePropertyDetailResponse,
@@ -13,9 +12,6 @@ import type {
 export const consoleApi = createApi({
   baseQuery: fetchBaseQuery({ baseUrl: "/api/console" }),
   endpoints: (builder) => ({
-    getMaterials: builder.query<ConsoleMaterialsResponse, void>({
-      query: () => "/materials",
-    }),
     getMaterialUploadOptions: builder.query<MaterialUploadResponse, void>({
       query: () => "/materials/upload-options",
     }),
@@ -46,7 +42,6 @@ export const consoleApi = createApi({
 
 export const {
   useGetMaterialUploadOptionsQuery,
-  useGetMaterialsQuery,
   useGetOverviewQuery,
   useGetPropertiesQuery,
   useGetPropertyDetailQuery,

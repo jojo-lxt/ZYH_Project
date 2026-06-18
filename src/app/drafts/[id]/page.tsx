@@ -1,7 +1,5 @@
-import { notFound } from "next/navigation";
 import { connection } from "next/server";
-import { XhsMiniProgramBridge } from "@/features/drafts/components/XhsMiniProgramBridge";
-import { getDraft } from "@/server/drafts/draftStore";
+import { DraftPlatformBridge } from "@/features/drafts/components/DraftPlatformBridge";
 
 export default async function DraftPage({
   params,
@@ -11,11 +9,6 @@ export default async function DraftPage({
   await connection();
 
   const { id } = await params;
-  const draft = await getDraft(id);
 
-  if (!draft) {
-    notFound();
-  }
-
-  return <XhsMiniProgramBridge draft={draft} />;
+  return <DraftPlatformBridge draftId={id} />;
 }
