@@ -2,5 +2,10 @@
   "appid": "6a334c0601ada50001ce0ac1",
   "compileType": "miniprogram",
   "miniprogramRoot": "./",
-  "projectname": "xhs-draft-publisher"
+  "projectname": "xhs-draft-publisher",
+  "setting": {
+    "minified": true,
+    "urlCheck": true,
+    "useNewCompiler": true
+  }
 }

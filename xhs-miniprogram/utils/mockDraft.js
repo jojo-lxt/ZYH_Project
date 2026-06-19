@@ -7,6 +7,18 @@ const mockImages = [
     id: "mock-2",
     url: "/assets/mock-draft-2.jpeg",
   },
+  {
+    id: "mock-3",
+    url: "/assets/mock-draft-3.jpeg",
+  },
+  {
+    id: "mock-4",
+    url: "/assets/mock-draft-4.jpeg",
+  },
+  {
+    id: "mock-5",
+    url: "/assets/mock-draft-5.jpeg",
+  },
 ];
 
 function getMockDraft() {
