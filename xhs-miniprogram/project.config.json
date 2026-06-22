@@ -1,5 +1,5 @@
 {
-  "appid": "6a334c0601ada50001ce0ac1",
+  "appid": "6a38a63b0ab4780001887d99",
   "compileType": "miniprogram",
   "miniprogramRoot": "./",
   "projectname": "xhs-draft-publisher",
@@ -7,5 +7,6 @@
     "minified": true,
     "urlCheck": true,
     "useNewCompiler": true
-  }
+  },
+  "libVersion": "3.133.1"
 }
