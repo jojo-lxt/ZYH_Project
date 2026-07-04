@@ -1,64 +1,41 @@
-import {
-  mockMaterialsData,
-  mockMaterialUploadData,
-  mockOverviewData,
-  mockPropertiesData,
-  mockPropertyDetailData,
-  mockSellingPointConfigData,
-  mockStrategyData,
-  mockTagConfigData,
-  mockUsersData,
-} from "@/shared/mock/consoleData";
+import * as consoleRepository from "@/server/console/consoleRepository";
 
-export function getConsoleOverview() {
-  return mockOverviewData;
+export async function getConsoleOverview() {
+  return consoleRepository.getOverview();
 }
 
-export function getConsoleStrategy() {
-  return mockStrategyData;
+export async function getConsoleStrategy() {
+  return consoleRepository.getStrategy();
 }
 
-export function getConsoleMaterials() {
-  return mockMaterialsData;
+export async function getConsoleMaterials() {
+  return consoleRepository.getMaterials();
 }
 
-export function getMaterialUploadOptions() {
-  return mockMaterialUploadData;
+export async function getMaterialUploadOptions() {
+  return consoleRepository.getMaterialUploadOptions();
 }
 
-export async function createMockMaterialUpload(formData: FormData) {
-  const files = formData
-    .getAll("images")
-    .filter((value): value is File => value instanceof File);
-
-  return {
-    files: files.map((file, index) => ({
-      id: `upload-${Date.now()}-${index}`,
-      name: file.name,
-      size: file.size,
-      status: "uploaded",
-      type: file.type || "application/octet-stream",
-    })),
-    total: files.length,
-  };
+export async function createMaterialUpload(formData: FormData) {
+  return consoleRepository.createMaterialUpload(formData);
 }
 
-export function getConsoleTagConfig() {
-  return mockTagConfigData;
+export async function getConsoleTagConfig() {
+  return consoleRepository.getTagConfig();
 }
 
-export function getConsoleSellingPointConfig() {
-  return mockSellingPointConfigData;
+export async function getConsoleSellingPointConfig() {
+  return consoleRepository.getSellingPointConfig();
 }
 
-export function getConsoleProperties() {
-  return mockPropertiesData;
+export async function getConsoleProperties() {
+  return consoleRepository.getProperties();
 }
 
-export function getConsolePropertyDetail() {
-  return mockPropertyDetailData;
+export async function getConsolePropertyDetail(id: string) {
+  return consoleRepository.getPropertyDetail(id);
 }
 
-export function getConsoleUsers() {
-  return mockUsersData;
+export async function getConsoleUsers() {
+  return consoleRepository.getUsers();
 }

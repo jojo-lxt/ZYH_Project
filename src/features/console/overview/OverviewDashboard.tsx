@@ -4,7 +4,8 @@ import { useState } from "react";
 import { App, Button, DatePicker, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useGetOverviewQuery, useGetStrategyQuery } from "@/store/consoleApi";
-import { mockOverviewData, mockStrategyData, type NoteRow } from "@/shared/mock/consoleData";
+import { mockOverviewData, mockStrategyData } from "@/shared/mock/consoleData";
+import type { NoteRow } from "@/shared/types/console";
 
 function StatCard({
   label,
@@ -311,4 +312,3 @@ export function OverviewDashboard() {
     <StrategyPage onModeChange={setOverviewMode} />
   );
 }
-

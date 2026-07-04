@@ -7,7 +7,7 @@ import type {
   ConsoleStrategyResponse,
   ConsoleUsersResponse,
   MaterialUploadResponse,
-} from "@/shared/mock/consoleData";
+} from "@/shared/types/console";
 
 export const consoleApi = createApi({
   baseQuery: fetchBaseQuery({ baseUrl: "/api/console" }),

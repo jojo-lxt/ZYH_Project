@@ -1,222 +1,111 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
+import { queryOne, queryRows } from "@/server/db";
 import type { DraftImage, XhsDraft } from "@/shared/types/drafts";
 
-type StoredImage = Omit<DraftImage, "url">;
-
-type StoredDraft = Omit<XhsDraft, "images" | "selectedImages"> & {
-  images: StoredImage[];
+type DraftRow = {
+  caption: string;
+  created_at: Date | string;
+  id: string;
+  tags: string[];
+  topics: string;
 };
 
-const draftRoot = path.join(process.cwd(), ".data", "xhs-drafts");
-const maxImages = 12;
-const maxImageSize = 12 * 1024 * 1024;
-
-function getDraftDir(id: string) {
-  return path.join(draftRoot, id);
-}
-
-function getDraftJsonPath(id: string) {
-  return path.join(getDraftDir(id), "draft.json");
-}
+type DraftImageRow = {
+  bytes?: Buffer;
+  filename: string;
+  id: string;
+  mime_type: string;
+  original_name: string;
+  score: number;
+  selected: boolean;
+  size_bytes: number;
+};
 
 function cleanId(value: string) {
   return value.replace(/[^a-zA-Z0-9-]/g, "");
 }
 
-function normalizeTag(value: string) {
-  return value.replace(/^#+/, "").replace(/\s+/g, "").trim();
-}
-
-export function normalizeTags(values: string[]) {
-  const seen = new Set<string>();
-
-  return values
-    .flatMap((value) => value.split(/[，,]/))
-    .map(normalizeTag)
-    .filter(Boolean)
-    .filter((tag) => {
-      const key = tag.toLocaleLowerCase();
-
-      if (seen.has(key)) {
-        return false;
-      }
-
-      seen.add(key);
-      return true;
-    })
-    .slice(0, 20);
-}
-
-function getImageExtension(file: File) {
-  const fromMime = {
-    "image/jpeg": ".jpg",
-    "image/png": ".png",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-  }[file.type];
-
-  if (fromMime) {
-    return fromMime;
-  }
-
-  const originalExtension = path.extname(file.name).toLowerCase();
-  return originalExtension || ".jpg";
-}
-
-function serializeImage(image: StoredImage, draftId: string): DraftImage {
+function serializeImage(image: DraftImageRow, draftId: string): DraftImage {
   return {
-    ...image,
+    filename: image.filename,
+    id: image.id,
+    mimeType: image.mime_type,
+    originalName: image.original_name,
+    score: image.score,
+    selected: image.selected,
+    size: image.size_bytes,
     url: `/api/drafts/${draftId}/images/${image.filename}`,
   };
 }
 
-function hydrateDraft(draft: StoredDraft): XhsDraft {
-  const images = draft.images.map((image) => serializeImage(image, draft.id));
+function formatCreatedAt(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
+}
+
+async function hydrateDraft(row: DraftRow) {
+  const imageRows = await queryRows<DraftImageRow>(
+    `
+      SELECT id, filename, original_name, mime_type, size_bytes, selected, score
+      FROM draft_images
+      WHERE draft_id = $1
+      ORDER BY sort_order, created_at
+    `,
+    [row.id],
+  );
+  const images = imageRows.map((image) => serializeImage(image, row.id));
 
   return {
-    ...draft,
+    caption: row.caption,
+    createdAt: formatCreatedAt(row.created_at),
+    id: row.id,
     images,
     selectedImages: images.filter((image) => image.selected),
+    tags: row.tags ?? [],
+    topics: row.topics,
   };
 }
 
-function buildTopics(tags: string[]) {
-  return tags.map((tag) => `#${tag}`).join(" ");
-}
-
-function buildCaption(tags: string[], selectedCount: number) {
-  const primaryTag = tags[0] ?? "今日灵感";
-  const secondaryTag = tags[1] ?? "值得记录";
-  const topicText = buildTopics(tags);
-
-  const lines = [
-    `这组图很适合用来分享「${primaryTag}」的氛围。`,
-    `画面里最打动人的是细节和整体感觉都很自然，${secondaryTag}的主题也比较突出。`,
-    `我从素材里选了${selectedCount}张更适合发小红书的图片，适合配一条轻松但有推荐感的笔记。`,
-  ];
-
-  return topicText ? `${lines.join("\n\n")}\n\n${topicText}` : lines.join("\n\n");
-}
-
-function scoreImage(file: File, index: number) {
-  const mimeBonus = file.type === "image/jpeg" || file.type === "image/png" ? 200_000 : 0;
-  return file.size + mimeBonus - index;
-}
-
-export async function createDraftFromFormData(formData: FormData) {
-  const uploadedImages = formData
-    .getAll("images")
-    .filter((value): value is File => value instanceof File)
-    .slice(0, maxImages);
-
-  if (uploadedImages.length === 0) {
-    throw new Error("至少需要上传一张图片");
-  }
-
-  const tags = normalizeTags(
-    formData
-      .getAll("tags")
-      .filter((value): value is string => typeof value === "string"),
-  );
-
-  const id = randomUUID();
-  const draftDir = getDraftDir(id);
-
-  await mkdir(draftDir, { recursive: true });
-
-  const scoredImages = uploadedImages.map((file, index) => ({
-    file,
-    index,
-    score: scoreImage(file, index),
-  }));
-
-  const selectedIndexes = new Set(
-    scoredImages
-      .toSorted((a, b) => b.score - a.score)
-      .slice(0, 3)
-      .map((item) => item.index),
-  );
-
-  const images: StoredImage[] = [];
-
-  for (const [index, file] of uploadedImages.entries()) {
-    if (!file.type.startsWith("image/")) {
-      throw new Error("只能上传图片文件");
-    }
-
-    if (file.size > maxImageSize) {
-      throw new Error("单张图片不能超过 12MB");
-    }
-
-    const filename = `${String(index + 1).padStart(2, "0")}-${randomUUID()}${getImageExtension(file)}`;
-    const bytes = Buffer.from(await file.arrayBuffer());
-
-    await writeFile(path.join(draftDir, filename), bytes);
-
-    images.push({
-      id: randomUUID(),
-      filename,
-      originalName: file.name,
-      mimeType: file.type || "application/octet-stream",
-      size: file.size,
-      selected: selectedIndexes.has(index),
-      score: scoredImages[index]?.score ?? 0,
-    });
-  }
-
-  const selectedCount = images.filter((image) => image.selected).length;
-  const draft: StoredDraft = {
-    id,
-    createdAt: new Date().toISOString(),
-    tags,
-    topics: buildTopics(tags),
-    caption: buildCaption(tags, selectedCount),
-    images,
-  };
-
-  await writeFile(getDraftJsonPath(id), JSON.stringify(draft, null, 2), "utf8");
-
-  return hydrateDraft(draft);
-}
-
-export async function getDraft(id: string) {
+export async function getDraft(id: string): Promise<XhsDraft | null> {
   const safeId = cleanId(id);
 
   if (!safeId || safeId !== id) {
     return null;
   }
 
-  try {
-    const rawDraft = await readFile(getDraftJsonPath(id), "utf8");
-    return hydrateDraft(JSON.parse(rawDraft) as StoredDraft);
-  } catch {
-    return null;
-  }
+  const draft = await queryOne<DraftRow>(
+    `
+      SELECT id, created_at, tags, caption, topics
+      FROM drafts
+      WHERE id = $1
+    `,
+    [id],
+  );
+
+  return draft ? hydrateDraft(draft) : null;
 }
 
 export async function getDraftImage(id: string, filename: string) {
-  const draft = await getDraft(id);
+  const safeId = cleanId(id);
 
-  if (!draft) {
+  if (!safeId || safeId !== id || filename.includes("/") || filename.includes("\\")) {
     return null;
   }
 
-  const image = draft.images.find((item) => item.filename === filename);
+  const image = await queryOne<DraftImageRow>(
+    `
+      SELECT id, filename, original_name, mime_type, size_bytes, selected, score, bytes
+      FROM draft_images
+      WHERE draft_id = $1 AND filename = $2
+    `,
+    [id, filename],
+  );
 
-  if (!image) {
-    return null;
-  }
-
-  const filePath = path.join(getDraftDir(id), image.filename);
-
-  if (!filePath.startsWith(getDraftDir(id))) {
+  if (!image?.bytes) {
     return null;
   }
 
   return {
-    image,
-    bytes: await readFile(filePath),
+    bytes: image.bytes,
+    image: serializeImage(image, id),
   };
 }

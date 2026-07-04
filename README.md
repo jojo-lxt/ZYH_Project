@@ -27,8 +27,8 @@ src/
       components/         控制台外壳和导航
     drafts/               发布平台选择中间页
   server/                 后端服务层
-    console/              控制台接口服务，目前返回固定假数据
-    drafts/               草稿生成和本地文件存储逻辑
+    console/              控制台接口服务和数据库查询
+    drafts/               草稿读取和图片读取逻辑
   shared/                 前后端共享代码
     lib/                  通用工具
     mock/                 固定假数据
@@ -45,8 +45,7 @@ src/
 - `GET /api/console/properties`
 - `GET /api/console/properties/:id`
 - `GET /api/console/users`
-- `POST /api/drafts`
 - `GET /api/drafts/:id`
 - `GET /api/drafts/:id/images/:filename`
 
-后续接数据库时，优先替换 `src/server` 下的服务实现；页面组件和 `app/api` 的 HTTP 入口可以保持相对稳定。
+控制台 API 和草稿 API 通过 `src/server` 下的服务层访问 PostgreSQL。`src/shared/mock/consoleData.ts` 仍保留为前端兜底数据，确认数据库数据完整后可再删除。

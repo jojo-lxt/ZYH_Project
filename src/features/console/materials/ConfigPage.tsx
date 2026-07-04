@@ -13,7 +13,8 @@ import {
   updateConfigItem as updateConfigItemAction,
   type ConfigKind,
 } from "@/store/consoleSlice";
-import { mockSellingPointConfigData, mockTagConfigData, type ConfigTreeItem } from "@/shared/mock/consoleData";
+import { mockSellingPointConfigData, mockTagConfigData } from "@/shared/mock/consoleData";
+import type { ConfigTreeItem } from "@/shared/types/console";
 
 function findConfigItem(items: ConfigTreeItem[], id: string): ConfigTreeItem | null {
   for (const item of items) {
@@ -470,4 +471,3 @@ export function ConfigPage({ title }: { title: string }) {
     </section>
   );
 }
-

@@ -21,7 +21,8 @@ import {
   upsertProperty,
   upsertUser,
 } from "@/store/consoleSlice";
-import { mockPropertyDetailData, type PropertyRow, type UserRow } from "@/shared/mock/consoleData";
+import { mockPropertyDetailData } from "@/shared/mock/consoleData";
+import type { PropertyRow, UserRow } from "@/shared/types/console";
 
 function formatNow() {
   const date = new Date();

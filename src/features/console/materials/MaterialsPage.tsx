@@ -14,7 +14,7 @@ import {
   setMaterialTags,
   updateMaterialTypeConfig,
 } from "@/store/consoleSlice";
-import type { ConfigTreeItem, MaterialItem } from "@/shared/mock/consoleData";
+import type { ConfigTreeItem, MaterialItem } from "@/shared/types/console";
 
 function formatNow() {
   const date = new Date();
@@ -1049,4 +1049,3 @@ export function MaterialsPage() {
     </section>
   );
 }
-

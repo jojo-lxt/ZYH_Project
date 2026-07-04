@@ -5,7 +5,8 @@ import { AppstoreOutlined, ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOut
 import { App, Button, Checkbox, Progress, Radio, Select, Space, Steps, Tabs, Tag, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useGetMaterialUploadOptionsQuery } from "@/store/consoleApi";
-import { mockMaterialUploadData, type QuickTagGroup } from "@/shared/mock/consoleData";
+import { mockMaterialUploadData } from "@/shared/mock/consoleData";
+import type { QuickTagGroup } from "@/shared/types/console";
 
 const { Dragger } = Upload;
 

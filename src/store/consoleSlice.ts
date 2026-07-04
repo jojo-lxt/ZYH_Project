@@ -5,11 +5,8 @@ import {
   mockSellingPointConfigData,
   mockTagConfigData,
   mockUsersData,
-  type ConfigTreeItem,
-  type MaterialItem,
-  type PropertyRow,
-  type UserRow,
 } from "@/shared/mock/consoleData";
+import type { ConfigTreeItem, MaterialItem, PropertyRow, UserRow } from "@/shared/types/console";
 import type { RootState } from "@/store/store";
 
 export type ConfigKind = "selling" | "tag";
