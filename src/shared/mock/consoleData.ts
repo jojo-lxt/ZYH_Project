@@ -48,7 +48,7 @@ export const mockNotes: NoteRow[] = [
   },
 ];
 
-export const mockMaterials: MaterialItem[] = [
+const mockMaterialBase: Array<Omit<MaterialItem, "attributeTags" | "fileSizeBytes" | "imageUrl" | "sellingTags">> = [
   {
     id: 1,
     title: "滨湖公园日落.jpg",
@@ -162,6 +162,14 @@ export const mockMaterials: MaterialItem[] = [
     accent: "#d69b50",
   },
 ];
+
+export const mockMaterials: MaterialItem[] = mockMaterialBase.map((item) => ({
+  ...item,
+  attributeTags: [],
+  fileSizeBytes: 0,
+  imageUrl: null,
+  sellingTags: [],
+}));
 
 export const mockProperties: PropertyRow[] = [
   {

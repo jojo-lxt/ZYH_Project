@@ -10,18 +10,22 @@ export type RankItem = {
 };
 
 export type MaterialItem = {
+  accent: string;
+  attributeTags: string[];
   id: number;
   title: string;
   category: string;
+  color: string;
+  fileSizeBytes: number;
+  imageUrl?: string | null;
   platforms: string[];
   size: string;
   stage: string;
+  sellingTags: string[];
   tone: string;
   updatedAt: string;
   uploadedAt: string;
   uploader: string;
-  color: string;
-  accent: string;
 };
 
 export type NoteRow = {
@@ -49,6 +53,7 @@ export type UserRow = {
   phone: string;
   role: string;
   property: string;
+  status?: string;
   createdAt: string;
 };
 

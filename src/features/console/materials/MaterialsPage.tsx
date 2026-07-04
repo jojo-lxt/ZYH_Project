@@ -3,25 +3,15 @@
 import { useMemo, useState } from "react";
 import { MenuOutlined, ReloadOutlined, UnorderedListOutlined } from "@ant-design/icons";
 import { App, Button, Card, Checkbox, Drawer, Input, Menu, Modal, Radio, Select, Space, Tag } from "antd";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  deleteMaterials as deleteMaterialsAction,
-  resetMaterials as resetMaterialsAction,
-  selectMaterialTagOverrides,
-  selectMaterials,
-  selectSellingConfigTree,
-  selectTagConfigTree,
-  setMaterialTags,
-  updateMaterialTypeConfig,
-} from "@/store/consoleSlice";
+  useDeleteMaterialsMutation,
+  useGetMaterialsQuery,
+  useGetSellingPointConfigQuery,
+  useGetTagConfigQuery,
+  useUpdateMaterialMutation,
+  useUpdateMaterialTagsMutation,
+} from "@/store/consoleApi";
 import type { ConfigTreeItem, MaterialItem } from "@/shared/types/console";
-
-function formatNow() {
-  const date = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
-
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
-}
 
 type MaterialTagKind = "attribute" | "selling";
 
@@ -51,36 +41,15 @@ type MaterialTypeConfigState = {
   stage: string;
 };
 
-type MaterialTagOverride = {
-  attributeTags?: string[];
-  sellingTags?: string[];
-};
-
 type MaterialTagGroup = {
   name: string;
   options: string[];
 };
 
-const defaultSellingTags = [
-  "浦东唯一的金茂府",
-  "张江最稀缺的四房",
-  "高新技术企业密度高，高学历和高薪人口众多",
-  "纯洋房，容积率只有 1.6，改善感更明确",
-  "金茂品牌背书强",
-  "张江改善的低门槛选择",
-];
-
-const defaultAttributeTags = [
-  "园区景观",
-  "林荫步道",
-  "花园景观",
-  "室外泳池",
-  "城市景观",
-  "景观绿化",
-];
-
 const materialCategoryOptions = ["内页图", "海报首图"];
 const materialPlatformOptions = ["小红书", "微信"];
+const emptyConfigTree: ConfigTreeItem[] = [];
+const emptyMaterials: MaterialItem[] = [];
 const materialStageOptions = [
   "交付和口碑期",
   "亮相开放前",
@@ -97,21 +66,19 @@ const materialStageOptions = [
 ];
 
 function getMaterialFileSize(item: MaterialItem) {
-  return `${Math.round(280 + item.id * 52)} KB`;
-}
-
-function getMaterialTags(
-  item: MaterialItem,
-  kind: MaterialTagKind,
-  overrides: Record<number, MaterialTagOverride>,
-) {
-  const override = overrides[item.id];
-
-  if (kind === "selling") {
-    return override?.sellingTags ?? defaultSellingTags.slice(0, 2 + (item.id % 4));
+  if (item.fileSizeBytes <= 0) {
+    return "-";
   }
 
-  return override?.attributeTags ?? defaultAttributeTags.slice(0, item.id % 3);
+  if (item.fileSizeBytes < 1024 * 1024) {
+    return `${(item.fileSizeBytes / 1024).toFixed(2)} KB`;
+  }
+
+  return `${(item.fileSizeBytes / 1024 / 1024).toFixed(2)} MB`;
+}
+
+function getMaterialTags(item: MaterialItem, kind: MaterialTagKind) {
+  return kind === "selling" ? item.sellingTags : item.attributeTags;
 }
 
 function getMaterialTagGroupsFromTree(tree: ConfigTreeItem[]): MaterialTagGroup[] {
@@ -152,12 +119,18 @@ function MaterialPreview({
     <div
       className={`material-thumb ${className}`}
       style={{
-        background: `linear-gradient(145deg, ${item.color}, ${item.accent})`,
+        background: item.imageUrl
+          ? `center / cover no-repeat url("${item.imageUrl}")`
+          : `linear-gradient(145deg, ${item.color}, ${item.accent})`,
       }}
     >
       {showBadge ? <span>{item.category}</span> : null}
-      <div className="thumb-sky" />
-      <div className="thumb-ground" />
+      {item.imageUrl ? null : (
+        <>
+          <div className="thumb-sky" />
+          <div className="thumb-ground" />
+        </>
+      )}
     </div>
   );
 }
@@ -723,11 +696,15 @@ function FilterRail({
 
 export function MaterialsPage() {
   const { message } = App.useApp();
-  const dispatch = useAppDispatch();
-  const materials = useAppSelector(selectMaterials);
-  const tagOverrides = useAppSelector(selectMaterialTagOverrides);
-  const sellingConfigTree = useAppSelector(selectSellingConfigTree);
-  const tagConfigTree = useAppSelector(selectTagConfigTree);
+  const { data: materialsData, refetch: refetchMaterials } = useGetMaterialsQuery();
+  const { data: sellingConfigData } = useGetSellingPointConfigQuery();
+  const { data: tagConfigData } = useGetTagConfigQuery();
+  const [deleteMaterialsMutation] = useDeleteMaterialsMutation();
+  const [updateMaterial] = useUpdateMaterialMutation();
+  const [updateMaterialTags] = useUpdateMaterialTagsMutation();
+  const materials = materialsData?.materials ?? emptyMaterials;
+  const sellingConfigTree = sellingConfigData?.tree ?? emptyConfigTree;
+  const tagConfigTree = tagConfigData?.tree ?? emptyConfigTree;
   const [detailItem, setDetailItem] = useState<MaterialItem | null>(null);
   const [filters, setFilters] = useState<MaterialFilters>({
     attributeMatchMode: "any",
@@ -767,8 +744,8 @@ export function MaterialsPage() {
   const filteredMaterials = useMemo(
     () =>
       materials.filter((item) => {
-        const sellingTags = getMaterialTags(item, "selling", tagOverrides);
-        const attributeTags = getMaterialTags(item, "attribute", tagOverrides);
+        const sellingTags = getMaterialTags(item, "selling");
+        const attributeTags = getMaterialTags(item, "attribute");
         const allTags = [...sellingTags, ...attributeTags];
         const matchKeyword = item.title.toLowerCase().includes(keyword.trim().toLowerCase());
         const matchCategory =
@@ -810,27 +787,35 @@ export function MaterialsPage() {
           matchSellingTags
         );
       }),
-    [filters, keyword, materials, tagOverrides],
+    [filters, keyword, materials],
   );
 
   function openTagEditor(kind: MaterialTagKind, item: MaterialItem) {
     setTagEditor({
       item,
       kind,
-      selectedTags: getMaterialTags(item, kind, tagOverrides),
+      selectedTags: getMaterialTags(item, kind),
     });
   }
 
-  function saveTagEditor() {
+  async function saveTagEditor() {
     if (!tagEditor) {
       return;
     }
 
-    dispatch(setMaterialTags({
+    await updateMaterialTags({
       id: tagEditor.item.id,
       kind: tagEditor.kind,
       tags: tagEditor.selectedTags,
-    }));
+    }).unwrap();
+    setDetailItem((current) =>
+      current?.id === tagEditor.item.id
+        ? {
+          ...current,
+          [tagEditor.kind === "selling" ? "sellingTags" : "attributeTags"]: tagEditor.selectedTags,
+        }
+        : current,
+    );
     setTagEditor(null);
     message.success("标签已保存");
   }
@@ -853,7 +838,7 @@ export function MaterialsPage() {
   }
 
   function resetMaterials() {
-    dispatch(resetMaterialsAction());
+    refetchMaterials();
     setSelectedMaterialIds(new Set());
     setIsBatchMode(false);
     clearMaterialFilters();
@@ -874,13 +859,13 @@ export function MaterialsPage() {
     });
   }
 
-  function deleteMaterials(ids: number[]) {
+  async function deleteMaterials(ids: number[]) {
     if (ids.length === 0) {
       message.warning("请选择要删除的素材");
       return;
     }
 
-    dispatch(deleteMaterialsAction(ids));
+    await deleteMaterialsMutation(ids).unwrap();
     setSelectedMaterialIds(new Set());
     setDetailItem((current) => current && ids.includes(current.id) ? null : current);
     message.success(`已删除 ${ids.length} 个素材`);
@@ -895,7 +880,7 @@ export function MaterialsPage() {
     });
   }
 
-  function saveTypeConfig() {
+  async function saveTypeConfig() {
     if (!typeConfig) {
       return;
     }
@@ -905,12 +890,12 @@ export function MaterialsPage() {
       return;
     }
 
-    dispatch(updateMaterialTypeConfig({
+    await updateMaterial({
       category: typeConfig.category,
       id: typeConfig.item.id,
       platforms: typeConfig.platforms,
       stage: typeConfig.stage,
-    }));
+    }).unwrap();
     setDetailItem((current) =>
       current?.id === typeConfig.item.id
         ? {
@@ -918,7 +903,6 @@ export function MaterialsPage() {
           category: typeConfig.category,
           platforms: typeConfig.platforms,
           stage: typeConfig.stage,
-          updatedAt: formatNow(),
         }
         : current,
     );
@@ -926,8 +910,8 @@ export function MaterialsPage() {
     message.success("图片类型配置已保存");
   }
 
-  const detailSellingTags = detailItem ? getMaterialTags(detailItem, "selling", tagOverrides) : [];
-  const detailAttributeTags = detailItem ? getMaterialTags(detailItem, "attribute", tagOverrides) : [];
+  const detailSellingTags = detailItem ? getMaterialTags(detailItem, "selling") : [];
+  const detailAttributeTags = detailItem ? getMaterialTags(detailItem, "attribute") : [];
 
   return (
     <section className="console-page material-page">
@@ -978,8 +962,8 @@ export function MaterialsPage() {
         </div>
         <div className="material-grid">
           {filteredMaterials.map((item) => {
-            const sellingTags = getMaterialTags(item, "selling", tagOverrides);
-            const attributeTags = getMaterialTags(item, "attribute", tagOverrides);
+            const sellingTags = getMaterialTags(item, "selling");
+            const attributeTags = getMaterialTags(item, "attribute");
 
             return (
               <MaterialCard
@@ -1024,7 +1008,14 @@ export function MaterialsPage() {
             deleteMaterials([detailItem.id]);
           }
         }}
-        onDownload={() => message.success("已模拟下载原图")}
+        onDownload={() => {
+          if (!detailItem?.imageUrl) {
+            message.warning("当前素材没有原图地址");
+            return;
+          }
+
+          window.open(detailItem.imageUrl, "_blank", "noopener,noreferrer");
+        }}
         onEditAttribute={() => {
           if (detailItem) {
             openTagEditor("attribute", detailItem);

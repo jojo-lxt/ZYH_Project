@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS materials (
   category text NOT NULL DEFAULT '未分类',
   platforms text[] NOT NULL DEFAULT '{}',
   size_text text NOT NULL DEFAULT '-',
+  file_size_bytes integer NOT NULL DEFAULT 0,
+  image_url text,
   stage text NOT NULL DEFAULT '待配置',
   tone text NOT NULL DEFAULT '-',
   uploader text NOT NULL DEFAULT '系统',
@@ -15,6 +17,9 @@ CREATE TABLE IF NOT EXISTS materials (
 
 CREATE INDEX IF NOT EXISTS idx_materials_updated_at ON materials (updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_materials_uploaded_at ON materials (uploaded_at DESC);
+
+ALTER TABLE IF EXISTS materials ADD COLUMN IF NOT EXISTS file_size_bytes integer NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS materials ADD COLUMN IF NOT EXISTS image_url text;
 
 CREATE TABLE IF NOT EXISTS material_tags (
   material_id integer NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
@@ -105,11 +110,31 @@ CREATE TABLE IF NOT EXISTS console_users (
   phone text NOT NULL,
   role text NOT NULL,
   property text NOT NULL,
+  password_hash text,
+  status text NOT NULL DEFAULT 'active',
+  last_login_at timestamptz,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_console_users_created_at ON console_users (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_console_users_phone ON console_users (phone);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_console_users_phone_unique ON console_users (phone);
+
+ALTER TABLE IF EXISTS console_users ADD COLUMN IF NOT EXISTS password_hash text;
+ALTER TABLE IF EXISTS console_users ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'active';
+ALTER TABLE IF EXISTS console_users ADD COLUMN IF NOT EXISTS last_login_at timestamptz;
+
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id text PRIMARY KEY,
+  user_id text NOT NULL REFERENCES console_users(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_seen_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions (user_id);
+CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at ON auth_sessions (expires_at);
 
 CREATE TABLE IF NOT EXISTS drafts (
   id text PRIMARY KEY,

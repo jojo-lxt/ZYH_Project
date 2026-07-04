@@ -1,93 +1,147 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ReloadOutlined, SettingOutlined, SortAscendingOutlined } from "@ant-design/icons";
-import { App, Button, Input, Modal, Pagination, Select, Space, Table, Tag } from "antd";
+import {
+  App,
+  Button,
+  Empty,
+  Input,
+  Modal,
+  Pagination,
+  Popconfirm,
+  Select,
+  Space,
+  Table,
+  Tag,
+} from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { QRCodeSVG } from "qrcode.react";
 import { copyTextToClipboard } from "@/shared/lib/clipboard";
-import { useGetPropertiesQuery, useGetPropertyDetailQuery, useGetUsersQuery } from "@/store/consoleApi";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  deleteProperty as deletePropertyAction,
-  deleteUser as deleteUserAction,
-  resetProperties as resetPropertiesAction,
-  resetUsers as resetUsersAction,
-  reverseProperties,
-  reverseUsers,
-  selectProperties,
-  selectUsers,
-  upsertProperty,
-  upsertUser,
-} from "@/store/consoleSlice";
-import { mockPropertyDetailData } from "@/shared/mock/consoleData";
 import type { PropertyRow, UserRow } from "@/shared/types/console";
+import {
+  useCreatePropertyMutation,
+  useCreateUserMutation,
+  useDeletePropertyMutation,
+  useDeleteUserMutation,
+  useGetPropertiesQuery,
+  useGetPropertyDetailQuery,
+  useGetUsersQuery,
+  useUpdatePropertyMutation,
+  useUpdateUserMutation,
+} from "@/store/consoleApi";
 
-function formatNow() {
-  const date = new Date();
-  const pad = (value: number) => String(value).padStart(2, "0");
+type PropertyDraft = Omit<PropertyRow, "createdAt" | "key">;
 
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+type UserDraft = Omit<UserRow, "createdAt" | "key"> & {
+  password: string;
+};
+
+const emptyPropertyDraft: PropertyDraft = {
+  address: "",
+  developer: "",
+  name: "",
+  stage: "现房在售",
+  type: "住宅",
+};
+
+const emptyProperties: PropertyRow[] = [];
+const emptyUsers: UserRow[] = [];
+
+const emptyUserDraft: UserDraft = {
+  name: "",
+  password: "",
+  phone: "",
+  property: "",
+  role: "游客",
+  status: "active",
+};
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const data = (error as { data?: { error?: string }; error?: string })?.data;
+
+  return data?.error ?? (error as { error?: string })?.error ?? fallback;
 }
 
-function PropertyPage({ onDetail }: { onDetail: () => void }) {
+function PropertyPage({ onDetail }: { onDetail: (id: string) => void }) {
   const { message } = App.useApp();
-  const dispatch = useAppDispatch();
-  useGetPropertiesQuery();
-  const properties = useAppSelector(selectProperties);
-  const emptyDraft: PropertyRow = {
-    address: "",
-    createdAt: "",
-    developer: "",
-    key: "",
-    name: "",
-    stage: "现房在售",
-    type: "住宅",
-  };
-  const [draft, setDraft] = useState<PropertyRow>(emptyDraft);
+  const { data, isFetching, refetch } = useGetPropertiesQuery();
+  const [createProperty, { isLoading: isCreating }] = useCreatePropertyMutation();
+  const [updateProperty, { isLoading: isUpdating }] = useUpdatePropertyMutation();
+  const [deletePropertyMutation] = useDeletePropertyMutation();
+  const properties = data?.properties ?? emptyProperties;
+  const [draft, setDraft] = useState<PropertyDraft>(emptyPropertyDraft);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nameQuery, setNameQuery] = useState("");
+  const [sortDesc, setSortDesc] = useState(true);
   const [stageQuery, setStageQuery] = useState<string | undefined>();
 
-  const filteredProperties = useMemo(
+  const stageOptions = useMemo(
     () =>
-      properties.filter((property) => {
-        const matchName = property.name.includes(nameQuery.trim());
-        const matchStage = !stageQuery || property.stage === stageQuery;
-
-        return matchName && matchStage;
-      }),
-    [nameQuery, properties, stageQuery],
+      Array.from(new Set([...properties.map((property) => property.stage), "现房在售", "交付和口碑期", "强销期"]))
+        .filter(Boolean)
+        .map((value) => ({ label: value, value })),
+    [properties],
   );
+  const filteredProperties = useMemo(() => {
+    const list = properties.filter((property) => {
+      const query = nameQuery.trim();
+      const matchName = !query || property.name.includes(query);
+      const matchStage = !stageQuery || property.stage === stageQuery;
+
+      return matchName && matchStage;
+    });
+
+    return sortDesc ? list : [...list].reverse();
+  }, [nameQuery, properties, sortDesc, stageQuery]);
 
   function openCreateProperty() {
     setEditingKey(null);
-    setDraft({ ...emptyDraft, createdAt: formatNow(), key: `property-${Date.now()}` });
+    setDraft(emptyPropertyDraft);
     setIsModalOpen(true);
   }
 
   function openEditProperty(property: PropertyRow) {
     setEditingKey(property.key);
-    setDraft(property);
+    setDraft({
+      address: property.address,
+      developer: property.developer,
+      name: property.name,
+      stage: property.stage,
+      type: property.type,
+    });
     setIsModalOpen(true);
   }
 
-  function saveProperty() {
+  async function saveProperty() {
     if (!draft.developer.trim() || !draft.name.trim()) {
       message.warning("请填写开发商和项目名称");
       return;
     }
 
-    dispatch(upsertProperty(draft));
-    setIsModalOpen(false);
-    message.success(editingKey ? "项目已更新" : "项目已创建");
+    try {
+      if (editingKey) {
+        await updateProperty({ ...draft, id: editingKey }).unwrap();
+      } else {
+        await createProperty(draft).unwrap();
+      }
+
+      setIsModalOpen(false);
+      message.success(editingKey ? "项目已更新" : "项目已创建");
+    } catch (error) {
+      message.error(getApiErrorMessage(error, "项目保存失败"));
+    }
   }
 
-  function deleteProperty(key: string) {
-    dispatch(deletePropertyAction(key));
-    message.success("项目已删除");
+  async function deleteProperty(key: string) {
+    try {
+      await deletePropertyMutation(key).unwrap();
+      message.success("项目已删除");
+    } catch (error) {
+      message.error(getApiErrorMessage(error, "项目删除失败"));
+    }
   }
 
   const columns: ColumnsType<PropertyRow> = [
@@ -109,15 +163,22 @@ function PropertyPage({ onDetail }: { onDetail: () => void }) {
       title: "操作",
       render: (_, record) => (
         <Space>
-          <Button onClick={onDetail} type="link">
+          <Button onClick={() => onDetail(record.key)} type="link">
             详情
           </Button>
           <Button onClick={() => openEditProperty(record)} type="link">
             编辑
           </Button>
-          <Button danger onClick={() => deleteProperty(record.key)} type="link">
-            删除
-          </Button>
+          <Popconfirm
+            cancelText="取消"
+            okText="删除"
+            onConfirm={() => deleteProperty(record.key)}
+            title="确认删除该项目？"
+          >
+            <Button danger type="link">
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -134,40 +195,40 @@ function PropertyPage({ onDetail }: { onDetail: () => void }) {
         <Select
           allowClear
           onChange={(value) => setStageQuery(value)}
-          options={[
-            { label: "现房在售", value: "现房在售" },
-            { label: "交付和口碑期", value: "交付和口碑期" },
-          ]}
+          options={stageOptions}
           placeholder="请选择状态"
           value={stageQuery}
         />
         <Input disabled placeholder="当前开发商由表格创建/编辑维护" />
         <Space>
-          <Button onClick={() => {
-            setNameQuery("");
-            setStageQuery(undefined);
-          }}>
+          <Button
+            onClick={() => {
+              setNameQuery("");
+              setStageQuery(undefined);
+            }}
+          >
             重置
           </Button>
-          <Button onClick={() => message.success("查询完成")} type="primary">查询</Button>
-          <Button onClick={() => message.info("暂无更多筛选项")} type="link">展开</Button>
+          <Button onClick={() => message.success("查询完成")} type="primary">
+            查询
+          </Button>
         </Space>
       </div>
       <div className="section-title-row">
         <h2>项目</h2>
         <Space>
-          <Button onClick={openCreateProperty} type="primary">创建项目</Button>
+          <Button onClick={openCreateProperty} type="primary">
+            创建项目
+          </Button>
           <Button
             icon={<ReloadOutlined />}
-            onClick={() => {
-              dispatch(resetPropertiesAction());
-              message.success("项目列表已刷新");
-            }}
+            loading={isFetching}
+            onClick={() => refetch()}
             type="text"
           />
           <Button
             icon={<SortAscendingOutlined />}
-            onClick={() => dispatch(reverseProperties())}
+            onClick={() => setSortDesc((value) => !value)}
             type="text"
           />
           <Button
@@ -177,10 +238,17 @@ function PropertyPage({ onDetail }: { onDetail: () => void }) {
           />
         </Space>
       </div>
-      <Table columns={columns} dataSource={filteredProperties} pagination={false} />
+      <Table
+        columns={columns}
+        dataSource={filteredProperties}
+        loading={isFetching}
+        pagination={false}
+        rowKey="key"
+      />
 
       <Modal
         centered
+        confirmLoading={isCreating || isUpdating}
         onCancel={() => setIsModalOpen(false)}
         onOk={saveProperty}
         open={isModalOpen}
@@ -218,11 +286,7 @@ function PropertyPage({ onDetail }: { onDetail: () => void }) {
             <span>营销阶段</span>
             <Select
               onChange={(value) => setDraft((current) => ({ ...current, stage: value }))}
-              options={[
-                { label: "现房在售", value: "现房在售" },
-                { label: "交付和口碑期", value: "交付和口碑期" },
-                { label: "强销期", value: "强销期" },
-              ]}
+              options={stageOptions}
               value={draft.stage}
             />
           </label>
@@ -241,7 +305,31 @@ function PropertyPage({ onDetail }: { onDetail: () => void }) {
 
 function PropertyDetailPage() {
   const { message } = App.useApp();
-  const { data = mockPropertyDetailData } = useGetPropertyDetailQuery("1");
+  const searchParams = useSearchParams();
+  const propertyIdFromUrl = searchParams.get("id");
+  const { data: propertiesData, isLoading: isLoadingProperties } = useGetPropertiesQuery();
+  const fallbackPropertyId = propertiesData?.properties[0]?.key;
+  const propertyId = propertyIdFromUrl || fallbackPropertyId;
+  const { data, isFetching } = useGetPropertyDetailQuery(propertyId ?? "", { skip: !propertyId });
+
+  if (!propertyId && !isLoadingProperties) {
+    return (
+      <section className="console-page">
+        <p className="breadcrumb">项目管理列表 / 详情</p>
+        <Empty description="数据库中暂无项目" />
+      </section>
+    );
+  }
+
+  if (!data) {
+    return (
+      <section className="console-page">
+        <p className="breadcrumb">项目管理列表 / 详情</p>
+        <Empty description={isFetching || isLoadingProperties ? "正在读取项目详情" : "项目详情不存在"} />
+      </section>
+    );
+  }
+
   const { property } = data;
 
   return (
@@ -258,28 +346,32 @@ function PropertyDetailPage() {
       </div>
       <h3 className="link-title">NFC 链接 & 二维码</h3>
       <div className="qr-channel-grid">
-        {data.channels.map((channel) => (
-          <div className="qr-channel" key={channel.label}>
-            <h3>{channel.label}</h3>
-            <p>
-              NFC 链接：
-              <button
-                onClick={async () => {
-                  const copied = await copyTextToClipboard(channel.qrValue);
-                  message[copied ? "success" : "error"](copied ? "已复制链接" : "复制失败");
-                }}
-                type="button"
-              >
-                复制
-              </button>
-            </p>
-            <p>二维码：扫码查看项目详情</p>
-            <div className="qr-placeholder">
-              <QRCodeSVG value={channel.qrValue} size={210} />
+        {data.channels.length > 0 ? (
+          data.channels.map((channel) => (
+            <div className="qr-channel" key={channel.label}>
+              <h3>{channel.label}</h3>
+              <p>
+                NFC 链接：
+                <button
+                  onClick={async () => {
+                    const copied = await copyTextToClipboard(channel.qrValue);
+                    message[copied ? "success" : "error"](copied ? "已复制链接" : "复制失败");
+                  }}
+                  type="button"
+                >
+                  复制
+                </button>
+              </p>
+              <p>二维码：扫码查看项目详情</p>
+              <div className="qr-placeholder">
+                <QRCodeSVG value={channel.qrValue} size={210} />
+              </div>
+              <time>{channel.updatedAt}</time>
             </div>
-            <time>{channel.updatedAt}</time>
-          </div>
-        ))}
+          ))
+        ) : (
+          <Empty description="该项目暂无渠道链接" />
+        )}
       </div>
     </section>
   );
@@ -287,68 +379,120 @@ function PropertyDetailPage() {
 
 function UsersPage() {
   const { message } = App.useApp();
-  const dispatch = useAppDispatch();
-  useGetUsersQuery();
-  const users = useAppSelector(selectUsers);
-  const emptyDraft: UserRow = {
-    createdAt: "",
-    key: "",
-    name: "",
-    phone: "",
-    property: "张江金茂府",
-    role: "游客",
-  };
+  const { data: usersData, isFetching, refetch } = useGetUsersQuery();
+  const { data: propertiesData } = useGetPropertiesQuery();
+  const [createUser, { isLoading: isCreating }] = useCreateUserMutation();
+  const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
+  const [deleteUserMutation] = useDeleteUserMutation();
+  const users = usersData?.users ?? emptyUsers;
+  const propertyOptions = useMemo(
+    () =>
+      (propertiesData?.properties ?? []).map((property) => ({
+        label: property.name,
+        value: property.name,
+      })),
+    [propertiesData],
+  );
   const [currentPage, setCurrentPage] = useState(1);
-  const [draft, setDraft] = useState<UserRow>(emptyDraft);
+  const [draft, setDraft] = useState<UserDraft>(emptyUserDraft);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nameQuery, setNameQuery] = useState("");
   const [phoneQuery, setPhoneQuery] = useState("");
   const [propertyQuery, setPropertyQuery] = useState<string | undefined>();
+  const [sortDesc, setSortDesc] = useState(true);
 
-  const filteredUsers = useMemo(
-    () =>
-      users.filter((user) => {
-        const matchPhone = user.phone.includes(phoneQuery.trim());
-        const matchName = user.name.includes(nameQuery.trim());
-        const matchProperty = !propertyQuery || user.property === propertyQuery;
+  const filteredUsers = useMemo(() => {
+    const list = users.filter((user) => {
+      const matchPhone = !phoneQuery.trim() || user.phone.includes(phoneQuery.trim());
+      const matchName = !nameQuery.trim() || user.name.includes(nameQuery.trim());
+      const matchProperty = !propertyQuery || user.property === propertyQuery;
 
-        return matchPhone && matchName && matchProperty;
-      }),
-    [nameQuery, phoneQuery, propertyQuery, users],
-  );
+      return matchPhone && matchName && matchProperty;
+    });
+
+    return sortDesc ? list : [...list].reverse();
+  }, [nameQuery, phoneQuery, propertyQuery, sortDesc, users]);
   const pageUsers = filteredUsers.slice((currentPage - 1) * 10, currentPage * 10);
 
   function openCreateUser() {
     setEditingKey(null);
     setDraft({
-      ...emptyDraft,
-      createdAt: formatNow(),
-      key: `user-${Date.now()}`,
+      ...emptyUserDraft,
+      property: propertyOptions[0]?.value ?? "",
     });
     setIsModalOpen(true);
   }
 
   function openEditUser(user: UserRow) {
     setEditingKey(user.key);
-    setDraft(user);
+    setDraft({
+      name: user.name,
+      password: "",
+      phone: user.phone,
+      property: user.property,
+      role: user.role,
+      status: user.status ?? "active",
+    });
     setIsModalOpen(true);
   }
 
-  function saveUser() {
+  async function saveUser() {
     if (!draft.name.trim() || !draft.phone.trim()) {
       message.warning("请填写用户名和手机号");
       return;
     }
 
-    dispatch(upsertUser(draft));
-    setIsModalOpen(false);
-    message.success(editingKey ? "用户已更新" : "用户已创建");
+    if (!/^1\d{10}$/.test(draft.phone.trim())) {
+      message.warning("请输入 11 位手机号");
+      return;
+    }
+
+    if (!editingKey && draft.password.length < 8) {
+      message.warning("新用户密码至少需要 8 位");
+      return;
+    }
+
+    if (editingKey && draft.password && draft.password.length < 8) {
+      message.warning("新密码至少需要 8 位");
+      return;
+    }
+
+    try {
+      if (editingKey) {
+        await updateUser({
+          id: editingKey,
+          name: draft.name,
+          password: draft.password || undefined,
+          phone: draft.phone,
+          property: draft.property,
+          role: draft.role,
+          status: draft.status,
+        }).unwrap();
+      } else {
+        await createUser({
+          name: draft.name,
+          password: draft.password,
+          phone: draft.phone,
+          property: draft.property,
+          role: draft.role,
+        }).unwrap();
+      }
+
+      setIsModalOpen(false);
+      message.success(editingKey ? "用户已更新" : "用户已创建");
+    } catch (error) {
+      message.error(getApiErrorMessage(error, "用户保存失败"));
+    }
   }
 
-  function deleteUser(key: string) {
-    dispatch(deleteUserAction(key));
-    message.success("用户已删除");
+  async function deleteUser(key: string) {
+    try {
+      await deleteUserMutation(key).unwrap();
+      message.success("用户已删除");
+    } catch (error) {
+      message.error(getApiErrorMessage(error, "用户删除失败"));
+    }
   }
 
   const columns: ColumnsType<UserRow> = [
@@ -380,16 +524,34 @@ function UsersPage() {
         <Tag color={role === "管理员" ? "success" : "processing"}>{role}</Tag>
       ),
     },
+    {
+      dataIndex: "status",
+      title: "状态",
+      render: (status: string = "active") => (
+        <Tag color={status === "active" ? "green" : "red"}>
+          {status === "active" ? "启用" : "禁用"}
+        </Tag>
+      ),
+    },
     { dataIndex: "property", title: "有权限的项目" },
     { dataIndex: "createdAt", title: "创建时间" },
     {
       title: "操作",
       render: (_, record) => (
         <Space>
-          <Button onClick={() => openEditUser(record)} type="link">编辑</Button>
-          <Button danger onClick={() => deleteUser(record.key)} type="link">
-            删除
+          <Button onClick={() => openEditUser(record)} type="link">
+            编辑
           </Button>
+          <Popconfirm
+            cancelText="取消"
+            okText="删除"
+            onConfirm={() => deleteUser(record.key)}
+            title="确认删除该用户？"
+          >
+            <Button danger type="link">
+              删除
+            </Button>
+          </Popconfirm>
         </Space>
       ),
     },
@@ -411,45 +573,50 @@ function UsersPage() {
         <Select
           allowClear
           onChange={(value) => setPropertyQuery(value)}
-          options={[{ label: "张江金茂府", value: "张江金茂府" }]}
+          options={propertyOptions}
           placeholder="有权限的项目"
           value={propertyQuery}
         />
         <Space>
-          <Button onClick={() => {
-            setPhoneQuery("");
-            setNameQuery("");
-            setPropertyQuery(undefined);
-            setCurrentPage(1);
-          }}>
+          <Button
+            onClick={() => {
+              setPhoneQuery("");
+              setNameQuery("");
+              setPropertyQuery(undefined);
+              setCurrentPage(1);
+            }}
+          >
             重置
           </Button>
-          <Button onClick={() => {
-            setCurrentPage(1);
-            message.success("查询完成");
-          }} type="primary">
+          <Button
+            onClick={() => {
+              setCurrentPage(1);
+              message.success("查询完成");
+            }}
+            type="primary"
+          >
             查询
           </Button>
-          <Button onClick={() => message.info("暂无更多筛选项")} type="link">展开</Button>
         </Space>
       </div>
       <div className="section-title-row">
         <h2>用户</h2>
         <Space>
-          <Button onClick={() => message.success("已模拟导入模板用户")}>模板导入</Button>
-          <Button onClick={openCreateUser} type="primary">创建</Button>
+          <Button onClick={openCreateUser} type="primary">
+            创建
+          </Button>
           <Button
             icon={<ReloadOutlined />}
+            loading={isFetching}
             onClick={() => {
-              dispatch(resetUsersAction());
+              refetch();
               setCurrentPage(1);
-              message.success("用户列表已刷新");
             }}
             type="text"
           />
           <Button
             icon={<SortAscendingOutlined />}
-            onClick={() => dispatch(reverseUsers())}
+            onClick={() => setSortDesc((value) => !value)}
             type="text"
           />
           <Button
@@ -459,7 +626,7 @@ function UsersPage() {
           />
         </Space>
       </div>
-      <Table columns={columns} dataSource={pageUsers} pagination={false} />
+      <Table columns={columns} dataSource={pageUsers} loading={isFetching} pagination={false} rowKey="key" />
       <div className="pagination-row">
         <span>共 {filteredUsers.length} 条</span>
         <Pagination
@@ -472,6 +639,7 @@ function UsersPage() {
 
       <Modal
         centered
+        confirmLoading={isCreating || isUpdating}
         onCancel={() => setIsModalOpen(false)}
         onOk={saveUser}
         open={isModalOpen}
@@ -494,6 +662,14 @@ function UsersPage() {
             />
           </label>
           <label>
+            <span>{editingKey ? "新密码" : "登录密码 *"}</span>
+            <Input.Password
+              onChange={(event) => setDraft((current) => ({ ...current, password: event.target.value }))}
+              placeholder={editingKey ? "留空则不修改" : "至少 8 位"}
+              value={draft.password}
+            />
+          </label>
+          <label>
             <span>角色</span>
             <Select
               onChange={(value) => setDraft((current) => ({ ...current, role: value }))}
@@ -508,8 +684,20 @@ function UsersPage() {
             <span>有权限的项目</span>
             <Select
               onChange={(value) => setDraft((current) => ({ ...current, property: value }))}
-              options={[{ label: "张江金茂府", value: "张江金茂府" }]}
-              value={draft.property}
+              options={propertyOptions}
+              placeholder="请选择项目"
+              value={draft.property || undefined}
+            />
+          </label>
+          <label>
+            <span>状态</span>
+            <Select
+              onChange={(value) => setDraft((current) => ({ ...current, status: value }))}
+              options={[
+                { label: "启用", value: "active" },
+                { label: "禁用", value: "disabled" },
+              ]}
+              value={draft.status}
             />
           </label>
         </div>
@@ -518,12 +706,10 @@ function UsersPage() {
   );
 }
 
-
 export function PropertyManagementPage() {
   const router = useRouter();
 
-  return <PropertyPage onDetail={() => router.push("/properties/detail")} />;
+  return <PropertyPage onDetail={(id) => router.push(`/properties/detail?id=${encodeURIComponent(id)}`)} />;
 }
-
 
 export { PropertyDetailPage, UsersPage };

@@ -35,6 +35,10 @@ PostgreSQL 本机数据库
 | `<你的www域名>` | 带 www 的域名，不需要可删掉 | `www.example.com` |
 | `<数据库密码>` | PostgreSQL 用户密码 | 使用强密码，不要用示例 |
 | `<服务器用户名>` | 当前登录服务器的 Linux 用户名 | 本项目计划使用 `zyh` |
+| `<管理员手机号>` | 后台第一个管理员登录手机号 | 11 位手机号 |
+| `<管理员登录密码>` | 后台第一个管理员登录密码 | 至少 8 位，使用强密码 |
+| `<管理员姓名>` | 后台第一个管理员显示名 | `管理员` |
+| `<管理员默认项目>` | 管理员默认有权限的项目名 | 没有项目时可先填 `-` |
 
 如果你的域名暂时没有备案或没有解析到服务器，可以先跳过 HTTPS 部分，先用服务器公网 IP 测试项目。
 
@@ -348,6 +352,7 @@ strategy_keywords
 properties
 property_channels
 console_users
+auth_sessions
 drafts
 draft_images
 ```
@@ -357,6 +362,34 @@ draft_images
 ```text
 这个脚本只建表，不导入假数据。
 如果你需要把现有假数据导入数据库，可以后续单独写 seed 脚本。
+```
+
+创建第一个后台管理员账号。必须替换 `<数据库密码>`、`<管理员手机号>`、`<管理员登录密码>`、`<管理员姓名>`、`<管理员默认项目>`：
+
+```bash
+cd /var/zyh/content-publisher-console
+ADMIN_PASSWORD_HASH="$(node scripts/hash-password.mjs '<管理员登录密码>')"
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher \
+  -v admin_phone="<管理员手机号>" \
+  -v admin_name="<管理员姓名>" \
+  -v admin_property="<管理员默认项目>" \
+  -v admin_password_hash="${ADMIN_PASSWORD_HASH}" <<'SQL'
+INSERT INTO console_users (id, name, phone, role, property, password_hash, status)
+VALUES ('admin-' || :'admin_phone', :'admin_name', :'admin_phone', '管理员', :'admin_property', :'admin_password_hash', 'active')
+ON CONFLICT (phone) DO UPDATE SET
+  name = EXCLUDED.name,
+  role = EXCLUDED.role,
+  property = EXCLUDED.property,
+  password_hash = EXCLUDED.password_hash,
+  status = 'active';
+SQL
+```
+
+验证管理员账号已写入：
+
+```bash
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher \
+  -c "SELECT name, phone, role, property, status FROM console_users;"
 ```
 
 ## 11. 创建生产环境变量

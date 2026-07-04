@@ -3,18 +3,30 @@
 import { useMemo, useState } from "react";
 import { CloseOutlined, DeleteOutlined, DownOutlined, PlusOutlined, RightOutlined, TableOutlined } from "@ant-design/icons";
 import { App, Button, Checkbox, Input, Modal, Space } from "antd";
-import { useGetSellingPointConfigQuery, useGetTagConfigQuery } from "@/store/consoleApi";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
-  addConfigItem as addConfigItemAction,
-  deleteConfigItem as deleteConfigItemAction,
-  selectSellingConfigTree,
-  selectTagConfigTree,
-  updateConfigItem as updateConfigItemAction,
-  type ConfigKind,
-} from "@/store/consoleSlice";
-import { mockSellingPointConfigData, mockTagConfigData } from "@/shared/mock/consoleData";
-import type { ConfigTreeItem } from "@/shared/types/console";
+  useCreateConfigItemMutation,
+  useDeleteConfigItemMutation,
+  useGetSellingPointConfigQuery,
+  useGetTagConfigQuery,
+  useUpdateConfigItemMutation,
+} from "@/store/consoleApi";
+import type { ConfigTreeItem, ConsoleConfigResponse } from "@/shared/types/console";
+
+type ConfigKind = "selling" | "tag";
+
+type ConfigDraft = {
+  description: string;
+  id: string;
+  modes: string[];
+  name: string;
+};
+
+const emptyConfigData: ConsoleConfigResponse = {
+  allowPrimaryCreate: false,
+  stats: [],
+  title: "",
+  tree: [],
+};
 
 function findConfigItem(items: ConfigTreeItem[], id: string): ConfigTreeItem | null {
   for (const item of items) {
@@ -64,35 +76,48 @@ function getFirstConfigId(items: ConfigTreeItem[]) {
 
 export function ConfigPage({ title }: { title: string }) {
   const { message } = App.useApp();
-  const dispatch = useAppDispatch();
   const isSellingPoint = title.includes("卖点");
-  const fallback = isSellingPoint ? mockSellingPointConfigData : mockTagConfigData;
-  const initialSelectedId = isSellingPoint ? "" : fallback.tree[0]?.id ?? "";
-  const initialSelected = initialSelectedId ? findConfigItem(fallback.tree, initialSelectedId) : null;
   const configKind: ConfigKind = isSellingPoint ? "selling" : "tag";
-  const { data: tagApiData = mockTagConfigData } = useGetTagConfigQuery();
-  const { data: sellingApiData = mockSellingPointConfigData } = useGetSellingPointConfigQuery();
+  const { data: tagApiData = emptyConfigData } = useGetTagConfigQuery();
+  const { data: sellingApiData = emptyConfigData } = useGetSellingPointConfigQuery();
+  const [createConfigItem] = useCreateConfigItemMutation();
+  const [deleteConfigItemMutation] = useDeleteConfigItemMutation();
+  const [updateConfigItemMutation] = useUpdateConfigItemMutation();
   const apiData = isSellingPoint ? sellingApiData : tagApiData;
-  const tree = useAppSelector((state) =>
-    isSellingPoint ? selectSellingConfigTree(state) : selectTagConfigTree(state),
-  );
+  const tree = apiData.tree;
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    () => new Set(isSellingPoint ? [] : [fallback.tree[0]?.id ?? ""]),
+    () => new Set(),
   );
-  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [selectedId, setSelectedId] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalParentId, setModalParentId] = useState<string | null>(null);
   const [modalName, setModalName] = useState("");
   const [modalDescription, setModalDescription] = useState("");
-  const [draftName, setDraftName] = useState(initialSelected?.name ?? "");
-  const [draftDescription, setDraftDescription] = useState(initialSelected?.description ?? "");
-  const [draftModes, setDraftModes] = useState<string[]>(
-    () => initialSelected?.modes ?? ["晒单式", "盘点式"],
-  );
-  const selected = selectedId ? findConfigItem(tree, selectedId) : null;
-  const selectedParent = selectedId ? getParentForConfigItem(tree, selectedId) : null;
+  const [draft, setDraft] = useState<ConfigDraft>({
+    description: "",
+    id: "",
+    modes: ["晒单式", "盘点式"],
+    name: "",
+  });
+  const effectiveSelectedId = useMemo(() => {
+    if (selectedId && findConfigItem(tree, selectedId)) {
+      return selectedId;
+    }
+
+    return getFirstConfigId(tree);
+  }, [selectedId, tree]);
+  const selected = effectiveSelectedId ? findConfigItem(tree, effectiveSelectedId) : null;
+  const selectedParent = effectiveSelectedId ? getParentForConfigItem(tree, effectiveSelectedId) : null;
   const isChildSelected = Boolean(
-    selectedParent?.children?.some((child) => child.id === selectedId),
+    selectedParent?.children?.some((child) => child.id === effectiveSelectedId),
+  );
+  const activeDraft = useMemo(
+    () => ({
+      description: draft.id === selected?.id ? draft.description : selected?.description ?? "",
+      modes: draft.id === selected?.id ? draft.modes : selected?.modes ?? ["晒单式", "盘点式"],
+      name: draft.id === selected?.id ? draft.name : selected?.name ?? "",
+    }),
+    [draft, selected],
   );
   const stats = useMemo(
     () => [
@@ -115,17 +140,30 @@ export function ConfigPage({ title }: { title: string }) {
     setExpandedIds(next);
   }
 
-  function syncConfigDraft(item: ConfigTreeItem | null) {
-    setDraftName(item?.name ?? "");
-    setDraftDescription(item?.description ?? "");
-    setDraftModes(item?.modes ?? ["晒单式", "盘点式"]);
-  }
-
   function selectConfigItem(id: string) {
     const item = findConfigItem(tree, id);
 
     setSelectedId(id);
-    syncConfigDraft(item);
+    setDraft({
+      description: item?.description ?? "",
+      id,
+      modes: item?.modes ?? ["晒单式", "盘点式"],
+      name: item?.name ?? "",
+    });
+  }
+
+  function updateActiveDraft(patch: Partial<Omit<ConfigDraft, "id">>) {
+    if (!selected) {
+      return;
+    }
+
+    setDraft({
+      description: activeDraft.description,
+      id: selected.id,
+      modes: activeDraft.modes,
+      name: activeDraft.name,
+      ...patch,
+    });
   }
 
   function openCreateModal(parentId: string | null) {
@@ -135,7 +173,7 @@ export function ConfigPage({ title }: { title: string }) {
     setIsModalOpen(true);
   }
 
-  function handleCreateItem() {
+  async function handleCreateItem() {
     const name = modalName.trim();
 
     if (!name) {
@@ -143,19 +181,13 @@ export function ConfigPage({ title }: { title: string }) {
       return;
     }
 
-    const id = `${isSellingPoint ? "sell" : "attr"}-${Date.now()}`;
-    const nextItem: ConfigTreeItem = {
+    const result = await createConfigItem({
       description: modalDescription.trim() || undefined,
-      id,
+      kind: configKind,
       modes: isSellingPoint ? ["种草式"] : undefined,
       name,
-    };
-
-    dispatch(addConfigItemAction({
-      item: nextItem,
-      kind: configKind,
       parentId: modalParentId,
-    }));
+    }).unwrap();
     setExpandedIds((current) => {
       const next = new Set(current);
       if (modalParentId) {
@@ -163,47 +195,40 @@ export function ConfigPage({ title }: { title: string }) {
       }
       return next;
     });
-    setSelectedId(id);
-    syncConfigDraft(nextItem);
+    setSelectedId(result.id);
     setIsModalOpen(false);
     message.success("新增项已保存");
   }
 
-  function handleDeleteItem(id: string) {
+  async function handleDeleteItem(id: string) {
     if (!id) {
       return;
     }
 
-    const next = deleteConfigItem(tree, id);
-    const nextId = getFirstConfigId(next);
+    const nextId = getFirstConfigId(deleteConfigItem(tree, id));
 
-    dispatch(deleteConfigItemAction({ id, kind: configKind }));
+    await deleteConfigItemMutation({ id, kind: configKind }).unwrap();
     setSelectedId(nextId);
-    syncConfigDraft(nextId ? findConfigItem(next, nextId) : null);
     message.success("已删除");
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!selected) {
       return;
     }
 
-    if (!draftName.trim()) {
+    if (!activeDraft.name.trim()) {
       message.warning(isSellingPoint ? "请输入卖点" : "请输入分类名称");
       return;
     }
 
-    dispatch(
-      updateConfigItemAction({
-        id: selected.id,
-        kind: configKind,
-        patch: {
-          description: draftDescription.trim() || undefined,
-          modes: isSellingPoint ? draftModes : undefined,
-          name: draftName.trim(),
-        },
-      }),
-    );
+    await updateConfigItemMutation({
+      description: activeDraft.description.trim() || undefined,
+      id: selected.id,
+      kind: configKind,
+      modes: isSellingPoint ? activeDraft.modes : undefined,
+      name: activeDraft.name.trim(),
+    }).unwrap();
     message.success("已保存当前配置");
   }
 
@@ -212,9 +237,9 @@ export function ConfigPage({ title }: { title: string }) {
       <div className="taxonomy-header">
         <h2>分类总览</h2>
         <Space>
-          <Button onClick={() => message.info("已模拟导入标签")}>导入标签</Button>
-          <Button onClick={() => message.success("已导出当前标签")}>导出标签</Button>
-          <Button onClick={() => message.success("模板已准备下载")}>下载模板</Button>
+          <Button onClick={() => message.info("导入接口尚未接入")}>导入标签</Button>
+          <Button onClick={() => message.info("导出接口尚未接入")}>导出标签</Button>
+          <Button onClick={() => message.info("模板下载接口尚未接入")}>下载模板</Button>
         </Space>
       </div>
 
@@ -247,7 +272,7 @@ export function ConfigPage({ title }: { title: string }) {
         <div className="taxonomy-list">
           {tree.map((item) => {
             const isOpen = expandedIds.has(item.id);
-            const isActive = selectedId === item.id;
+            const isActive = effectiveSelectedId === item.id;
 
             return (
               <div className="taxonomy-group" key={item.id}>
@@ -295,7 +320,7 @@ export function ConfigPage({ title }: { title: string }) {
                   ? item.children?.map((child) => (
                       <button
                         className={
-                          selectedId === child.id
+                          effectiveSelectedId === child.id
                             ? "taxonomy-node taxonomy-child active"
                             : "taxonomy-node taxonomy-child"
                         }
@@ -346,16 +371,16 @@ export function ConfigPage({ title }: { title: string }) {
                     <span>卖点</span>
                     <Input.TextArea
                       autoSize={{ minRows: 4, maxRows: 6 }}
-                      onChange={(event) => setDraftName(event.target.value)}
-                      value={draftName}
+                      onChange={(event) => updateActiveDraft({ name: event.target.value })}
+                      value={activeDraft.name}
                     />
                   </label>
                   <div className="taxonomy-field">
                     <span>模式</span>
                     <Checkbox.Group
-                      onChange={(values) => setDraftModes(values.map(String))}
+                      onChange={(values) => updateActiveDraft({ modes: values.map(String) })}
                       options={apiData.modeOptions ?? []}
-                      value={draftModes}
+                      value={activeDraft.modes}
                     />
                   </div>
                 </>
@@ -364,16 +389,16 @@ export function ConfigPage({ title }: { title: string }) {
                   <label className="taxonomy-field">
                     <span>分类名称 *</span>
                     <Input
-                      onChange={(event) => setDraftName(event.target.value)}
-                      value={draftName}
+                      onChange={(event) => updateActiveDraft({ name: event.target.value })}
+                      value={activeDraft.name}
                     />
                   </label>
                   <label className="taxonomy-field">
                     <span>描述（可选）</span>
                     <Input.TextArea
                       autoSize={{ minRows: 4, maxRows: 6 }}
-                      onChange={(event) => setDraftDescription(event.target.value)}
-                      value={draftDescription}
+                      onChange={(event) => updateActiveDraft({ description: event.target.value })}
+                      value={activeDraft.description}
                     />
                   </label>
                   {!isChildSelected ? (

@@ -4,8 +4,19 @@ import { useState } from "react";
 import { App, Button, DatePicker, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useGetOverviewQuery, useGetStrategyQuery } from "@/store/consoleApi";
-import { mockOverviewData, mockStrategyData } from "@/shared/mock/consoleData";
-import type { NoteRow } from "@/shared/types/console";
+import type { ConsoleOverviewResponse, ConsoleStrategyResponse, NoteRow } from "@/shared/types/console";
+
+const emptyOverviewData: ConsoleOverviewResponse = {
+  notes: [],
+  rankAuthors: [],
+  rankInteractions: [],
+  stats: [],
+};
+
+const emptyStrategyData: ConsoleStrategyResponse = {
+  heatRows: [],
+  keywords: [],
+};
 
 function StatCard({
   label,
@@ -89,7 +100,7 @@ function OverviewPage({
   onModeChange: (mode: "macro" | "strategy") => void;
 }) {
   const { message } = App.useApp();
-  const { data = mockOverviewData } = useGetOverviewQuery();
+  const { data = emptyOverviewData } = useGetOverviewQuery();
   const [channelType, setChannelType] = useState<"wechat" | "xhs">("xhs");
   const [noteType, setNoteType] = useState<"image" | "video">("image");
   const [ownerType, setOwnerType] = useState<"agent" | "guest" | "personal">("personal");
@@ -252,7 +263,7 @@ function StrategyPage({
   onModeChange: (mode: "macro" | "strategy") => void;
 }) {
   const { message } = App.useApp();
-  const { data = mockStrategyData } = useGetStrategyQuery();
+  const { data = emptyStrategyData } = useGetStrategyQuery();
 
   return (
     <section className="console-page">

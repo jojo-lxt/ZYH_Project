@@ -1,5 +1,7 @@
 import "server-only";
-import { queryOne, queryRows } from "@/server/db";
+import { randomUUID } from "node:crypto";
+import { hashPassword } from "@/server/auth/password";
+import { query, queryOne, queryRows, withTransaction } from "@/server/db";
 import type {
   ConfigTreeItem,
   ConsoleConfigResponse,
@@ -18,10 +20,14 @@ import type {
 
 type MaterialRow = {
   accent: string;
+  attribute_tags: string[];
   category: string;
   color: string;
+  file_size_bytes: number;
   id: number;
+  image_url: string | null;
   platforms: string[];
+  selling_tags: string[];
   size: string;
   stage: string;
   title: string;
@@ -67,7 +73,10 @@ type UserDbRow = {
   phone: string;
   property: string;
   role: string;
+  status: string;
 };
+
+type ConfigType = "selling_point" | "tag";
 
 function formatDateTime(value: Date | string) {
   const date = value instanceof Date ? value : new Date(value);
@@ -96,10 +105,14 @@ function formatDateTime(value: Date | string) {
 function mapMaterial(row: MaterialRow): MaterialItem {
   return {
     accent: row.accent,
+    attributeTags: row.attribute_tags ?? [],
     category: row.category,
     color: row.color,
+    fileSizeBytes: row.file_size_bytes,
     id: row.id,
+    imageUrl: row.image_url,
     platforms: row.platforms ?? [],
+    sellingTags: row.selling_tags ?? [],
     size: row.size,
     stage: row.stage,
     title: row.title,
@@ -130,6 +143,7 @@ function mapUser(row: UserDbRow): UserRow {
     phone: row.phone,
     property: row.property,
     role: row.role,
+    status: row.status,
   };
 }
 
@@ -173,7 +187,7 @@ function buildConfigTree(rows: ConfigNodeRow[]) {
   return roots;
 }
 
-async function getConfigRows(configType: "selling_point" | "tag") {
+async function getConfigRows(configType: ConfigType) {
   return queryRows<ConfigNodeRow>(
     `
       SELECT
@@ -220,8 +234,9 @@ export async function getOverview(): Promise<ConsoleOverviewResponse> {
       LIMIT 10
     `,
   );
-  const [noteCount, interactionCount, rankAuthors, rankInteractions] = await Promise.all([
+  const [noteCount, exposureCount, interactionCount, rankAuthors, rankInteractions] = await Promise.all([
     queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM notes"),
+    queryOne<{ count: string }>("SELECT COALESCE(SUM(exposure_count), 0)::text AS count FROM notes"),
     queryOne<{ count: string }>("SELECT COALESCE(SUM(likes), 0)::text AS count FROM notes"),
     queryRows<{ count: number; name: string }>(
       `
@@ -256,7 +271,7 @@ export async function getOverview(): Promise<ConsoleOverviewResponse> {
     rankInteractions,
     stats: [
       { label: "总笔记数量", trend: "来自数据库", value: noteCount?.count ?? "0" },
-      { label: "总曝光量", trend: "待接入平台数据", value: "0" },
+      { label: "总曝光量", trend: "来自数据库", value: exposureCount?.count ?? "0" },
       { label: "总互动数", trend: "来自点赞汇总", value: interactionCount?.count ?? "0" },
     ],
   };
@@ -302,10 +317,27 @@ export async function getMaterials(): Promise<ConsoleMaterialsResponse> {
   const [materials, total, filterGroups] = await Promise.all([
     queryRows<MaterialRow>(
       `
-        SELECT id, title, category, platforms, size_text AS size, stage, tone,
-          uploader, color, accent, uploaded_at, updated_at
-        FROM materials
-        ORDER BY updated_at DESC, id DESC
+        SELECT
+          m.id,
+          m.title,
+          m.category,
+          m.platforms,
+          m.size_text AS size,
+          m.file_size_bytes,
+          m.image_url,
+          m.stage,
+          m.tone,
+          m.uploader,
+          m.color,
+          m.accent,
+          m.uploaded_at,
+          m.updated_at,
+          COALESCE(array_remove(array_agg(t.tag) FILTER (WHERE t.kind = 'attribute'), NULL), '{}') AS attribute_tags,
+          COALESCE(array_remove(array_agg(t.tag) FILTER (WHERE t.kind = 'selling'), NULL), '{}') AS selling_tags
+        FROM materials m
+        LEFT JOIN material_tags t ON t.material_id = m.id
+        GROUP BY m.id
+        ORDER BY m.updated_at DESC, m.id DESC
       `,
     ),
     queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM materials"),
@@ -349,13 +381,13 @@ export async function createMaterialUpload(formData: FormData) {
     const result = await queryOne<{ id: number }>(
       `
         INSERT INTO materials (
-          title, category, platforms, size_text, stage, tone, uploader,
+          title, category, platforms, size_text, file_size_bytes, stage, tone, uploader,
           color, accent, uploaded_at, updated_at
         )
-        VALUES ($1, '未分类', '{}', '-', '待配置', '-', '系统上传', '#d8dee9', '#64748b', now(), now())
+        VALUES ($1, '未分类', '{}', '-', $2, '待配置', '-', '系统上传', '#d8dee9', '#64748b', now(), now())
         RETURNING id
       `,
-      [file.name || `upload-${Date.now()}-${index}`],
+      [file.name || `upload-${Date.now()}-${index}`, file.size],
     );
 
     uploadedFiles.push({
@@ -371,6 +403,65 @@ export async function createMaterialUpload(formData: FormData) {
     files: uploadedFiles,
     total: uploadedFiles.length,
   };
+}
+
+export async function updateMaterial(
+  id: number,
+  patch: {
+    category?: string;
+    platforms?: string[];
+    stage?: string;
+  },
+) {
+  const row = await queryOne<MaterialRow>(
+    `
+      UPDATE materials
+      SET
+        category = COALESCE($2, category),
+        platforms = COALESCE($3, platforms),
+        stage = COALESCE($4, stage),
+        updated_at = now()
+      WHERE id = $1
+      RETURNING id, title, category, platforms, size_text AS size, file_size_bytes, image_url,
+        stage, tone, uploader, color, accent, uploaded_at, updated_at,
+        '{}'::text[] AS attribute_tags,
+        '{}'::text[] AS selling_tags
+    `,
+    [id, patch.category ?? null, patch.platforms ?? null, patch.stage ?? null],
+  );
+
+  return row ? mapMaterial(row) : null;
+}
+
+export async function deleteMaterials(ids: number[]) {
+  if (ids.length === 0) {
+    return 0;
+  }
+
+  const result = await query("DELETE FROM materials WHERE id = ANY($1::int[])", [ids]);
+  return result.rowCount ?? 0;
+}
+
+export async function setMaterialTags(id: number, kind: "attribute" | "selling", tags: string[]) {
+  await withTransaction(async (client) => {
+    await client.query(
+      "DELETE FROM material_tags WHERE material_id = $1 AND kind = $2",
+      [id, kind],
+    );
+
+    for (const tag of tags.filter(Boolean)) {
+      await client.query(
+        `
+          INSERT INTO material_tags (material_id, kind, tag)
+          VALUES ($1, $2, $3)
+          ON CONFLICT (material_id, kind, tag) DO NOTHING
+        `,
+        [id, kind, tag],
+      );
+    }
+
+    await client.query("UPDATE materials SET updated_at = now() WHERE id = $1", [id]);
+  });
 }
 
 export async function getTagConfig(): Promise<ConsoleConfigResponse> {
@@ -396,6 +487,89 @@ export async function getSellingPointConfig(): Promise<ConsoleConfigResponse> {
   };
 }
 
+export async function createConfigItem({
+  configType,
+  description,
+  modes = [],
+  name,
+  parentId,
+}: {
+  configType: ConfigType;
+  description?: string;
+  modes?: string[];
+  name: string;
+  parentId: string | null;
+}) {
+  const id = `${configType === "selling_point" ? "sell" : "attr"}-${randomUUID()}`;
+
+  await withTransaction(async (client) => {
+    const sortResult = await client.query<{ sort_order: number }>(
+      `
+        SELECT COALESCE(MAX(sort_order), 0) + 1 AS sort_order
+        FROM config_nodes
+        WHERE config_type = $1 AND parent_id IS NOT DISTINCT FROM $2
+      `,
+      [configType, parentId],
+    );
+
+    await client.query(
+      `
+        INSERT INTO config_nodes (id, config_type, parent_id, name, description, sort_order)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [id, configType, parentId, name, description ?? null, sortResult.rows[0]?.sort_order ?? 1],
+    );
+
+    for (const mode of modes) {
+      await client.query(
+        "INSERT INTO config_node_modes (node_id, mode) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [id, mode],
+      );
+    }
+  });
+
+  return id;
+}
+
+export async function updateConfigItem(
+  id: string,
+  patch: {
+    description?: string;
+    modes?: string[];
+    name?: string;
+  },
+) {
+  await withTransaction(async (client) => {
+    await client.query(
+      `
+        UPDATE config_nodes
+        SET
+          name = COALESCE($2, name),
+          description = $3,
+          updated_at = now()
+        WHERE id = $1
+      `,
+      [id, patch.name ?? null, patch.description ?? null],
+    );
+
+    if (patch.modes) {
+      await client.query("DELETE FROM config_node_modes WHERE node_id = $1", [id]);
+
+      for (const mode of patch.modes) {
+        await client.query(
+          "INSERT INTO config_node_modes (node_id, mode) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+          [id, mode],
+        );
+      }
+    }
+  });
+}
+
+export async function deleteConfigItem(id: string) {
+  const result = await query("DELETE FROM config_nodes WHERE id = $1", [id]);
+  return result.rowCount ?? 0;
+}
+
 export async function getProperties(): Promise<ConsolePropertiesResponse> {
   const [properties, total] = await Promise.all([
     queryRows<PropertyDbRow>(
@@ -412,6 +586,43 @@ export async function getProperties(): Promise<ConsolePropertiesResponse> {
     properties: properties.map(mapProperty),
     total: Number(total?.count ?? properties.length),
   };
+}
+
+export async function createProperty(input: Omit<PropertyRow, "createdAt" | "key">) {
+  const row = await queryOne<PropertyDbRow>(
+    `
+      INSERT INTO properties (id, developer, name, type, stage, address, description)
+      VALUES ($1, $2, $3, $4, $5, $6, '-')
+      RETURNING id, developer, name, type, stage, address, description, created_at
+    `,
+    [randomUUID(), input.developer, input.name, input.type, input.stage, input.address],
+  );
+
+  return row ? mapProperty(row) : null;
+}
+
+export async function updateProperty(id: string, input: Partial<Omit<PropertyRow, "createdAt" | "key">>) {
+  const row = await queryOne<PropertyDbRow>(
+    `
+      UPDATE properties
+      SET
+        developer = COALESCE($2, developer),
+        name = COALESCE($3, name),
+        type = COALESCE($4, type),
+        stage = COALESCE($5, stage),
+        address = COALESCE($6, address)
+      WHERE id = $1
+      RETURNING id, developer, name, type, stage, address, description, created_at
+    `,
+    [id, input.developer ?? null, input.name ?? null, input.type ?? null, input.stage ?? null, input.address ?? null],
+  );
+
+  return row ? mapProperty(row) : null;
+}
+
+export async function deleteProperty(id: string) {
+  const result = await query("DELETE FROM properties WHERE id = $1", [id]);
+  return result.rowCount ?? 0;
 }
 
 export async function getPropertyDetail(id: string): Promise<ConsolePropertyDetailResponse | null> {
@@ -459,7 +670,7 @@ export async function getUsers(): Promise<ConsoleUsersResponse> {
   const [users, total] = await Promise.all([
     queryRows<UserDbRow>(
       `
-        SELECT id, name, phone, role, property, created_at
+        SELECT id, name, phone, role, property, status, created_at
         FROM console_users
         ORDER BY created_at DESC, id
       `,
@@ -471,4 +682,68 @@ export async function getUsers(): Promise<ConsoleUsersResponse> {
     total: Number(total?.count ?? users.length),
     users: users.map(mapUser),
   };
+}
+
+export async function createUser(input: {
+  name: string;
+  password: string;
+  phone: string;
+  property: string;
+  role: string;
+}) {
+  const passwordHash = await hashPassword(input.password);
+  const row = await queryOne<UserDbRow>(
+    `
+      INSERT INTO console_users (id, name, phone, role, property, password_hash, status)
+      VALUES ($1, $2, $3, $4, $5, $6, 'active')
+      RETURNING id, name, phone, role, property, status, created_at
+    `,
+    [randomUUID(), input.name, input.phone, input.role, input.property, passwordHash],
+  );
+
+  return row ? mapUser(row) : null;
+}
+
+export async function updateUser(
+  id: string,
+  input: {
+    name?: string;
+    password?: string;
+    phone?: string;
+    property?: string;
+    role?: string;
+    status?: string;
+  },
+) {
+  const passwordHash = input.password ? await hashPassword(input.password) : null;
+  const row = await queryOne<UserDbRow>(
+    `
+      UPDATE console_users
+      SET
+        name = COALESCE($2, name),
+        phone = COALESCE($3, phone),
+        role = COALESCE($4, role),
+        property = COALESCE($5, property),
+        status = COALESCE($6, status),
+        password_hash = COALESCE($7, password_hash)
+      WHERE id = $1
+      RETURNING id, name, phone, role, property, status, created_at
+    `,
+    [
+      id,
+      input.name ?? null,
+      input.phone ?? null,
+      input.role ?? null,
+      input.property ?? null,
+      input.status ?? null,
+      passwordHash,
+    ],
+  );
+
+  return row ? mapUser(row) : null;
+}
+
+export async function deleteUser(id: string) {
+  const result = await query("DELETE FROM console_users WHERE id = $1", [id]);
+  return result.rowCount ?? 0;
 }

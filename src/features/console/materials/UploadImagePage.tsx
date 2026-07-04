@@ -5,8 +5,12 @@ import { AppstoreOutlined, ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOut
 import { App, Button, Checkbox, Progress, Radio, Select, Space, Steps, Tabs, Tag, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useGetMaterialUploadOptionsQuery } from "@/store/consoleApi";
-import { mockMaterialUploadData } from "@/shared/mock/consoleData";
-import type { QuickTagGroup } from "@/shared/types/console";
+import type { MaterialUploadResponse, QuickTagGroup } from "@/shared/types/console";
+
+const emptyUploadOptions: MaterialUploadResponse = {
+  attributeGroups: [],
+  sellingPointGroups: [],
+};
 
 const { Dragger } = Upload;
 
@@ -108,7 +112,7 @@ function QuickTagPanel({
 
 export function MaterialUploadImagePage() {
   const { message } = App.useApp();
-  const { data = mockMaterialUploadData } = useGetMaterialUploadOptionsQuery();
+  const { data = emptyUploadOptions } = useGetMaterialUploadOptionsQuery();
   const [step, setStep] = useState(0);
   const [taggingMode, setTaggingMode] = useState<"choice" | "tagging">("choice");
   const [fileList, setFileList] = useState<UploadFile[]>([]);

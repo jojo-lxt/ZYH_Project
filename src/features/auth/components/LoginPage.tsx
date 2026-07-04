@@ -6,16 +6,11 @@ import {
   LockOutlined,
   LoginOutlined,
   MobileOutlined,
-  SafetyCertificateOutlined,
   WechatOutlined,
 } from "@ant-design/icons";
 import { App, Button, Checkbox, Divider, Form, Input, Select, Space, Tabs } from "antd";
-import { saveAuthSession } from "@/features/auth/lib/session";
-
-type LoginMode = "code" | "password";
 
 type LoginFormValues = {
-  code?: string;
   password?: string;
   phone?: string;
   remember?: boolean;
@@ -31,51 +26,49 @@ export function LoginPage() {
   const { message } = App.useApp();
   const router = useRouter();
   const [form] = Form.useForm<LoginFormValues>();
-  const [mode, setMode] = useState<LoginMode>("code");
-  const [countdown, setCountdown] = useState(0);
-
-  function startCountdown() {
-    const phone = form.getFieldValue("phone");
-
-    if (!phone) {
-      message.warning("请输入手机号码");
-      return;
-    }
-
-    message.success("验证码已发送");
-    setCountdown(60);
-
-    const timer = window.setInterval(() => {
-      setCountdown((current) => {
-        if (current <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
-
-        return current - 1;
-      });
-    }, 1000);
-  }
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function submitLogin(values: LoginFormValues) {
-    if (!values.phone) {
+    const phone = values.phone?.replace(/\s+/g, "").trim() ?? "";
+    const password = values.password ?? "";
+
+    if (!/^1\d{10}$/.test(phone)) {
       message.warning("请输入手机号码");
       return;
     }
 
-    if (mode === "code" && !values.code) {
-      message.warning("请输入验证码");
+    if (password.length < 8) {
+      message.warning("密码至少需要 8 位");
       return;
     }
 
-    if (mode === "password" && !values.password) {
-      message.warning("请输入密码");
-      return;
-    }
+    setIsSubmitting(true);
 
-    message.success("登录成功");
-    saveAuthSession(values.phone);
-    router.push("/overview");
+    try {
+      const response = await fetch("/api/auth/login", {
+        body: JSON.stringify({
+          password,
+          phone,
+          remember: Boolean(values.remember),
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        message.error(payload.error || "登录失败");
+        return;
+      }
+
+      message.success("登录成功");
+      router.replace("/overview");
+      router.refresh();
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -99,14 +92,10 @@ export function LoginPage() {
           </div>
 
           <Tabs
-            activeKey={mode}
+            activeKey="password"
             centered
             className="login-tabs"
-            items={[
-              { key: "code", label: "验证码登录" },
-              { key: "password", label: "密码登录" },
-            ]}
-            onChange={(key) => setMode(key as LoginMode)}
+            items={[{ key: "password", label: "密码登录" }]}
           />
 
           <Form
@@ -131,41 +120,28 @@ export function LoginPage() {
               </Space.Compact>
             </Form.Item>
 
-            {mode === "code" ? (
-              <Form.Item name="code" rules={[{ required: true, message: "请输入验证码" }]}>
-                <Input
-                  prefix={<SafetyCertificateOutlined />}
-                  placeholder="输入验证码"
-                  suffix={
-                    <Button disabled={countdown > 0} onClick={startCountdown} type="link">
-                      {countdown > 0 ? `${countdown}s` : "获取验证码"}
-                    </Button>
-                  }
-                />
-              </Form.Item>
-            ) : (
-              <Form.Item name="password" rules={[{ required: true, message: "请输入密码" }]}>
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="请输入密码"
-                />
-              </Form.Item>
-            )}
+            <Form.Item name="password" rules={[{ required: true, message: "请输入密码" }]}>
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder="请输入密码"
+              />
+            </Form.Item>
 
-            {mode === "password" ? (
-              <div className="login-tools">
-                <Form.Item name="remember" noStyle valuePropName="checked">
-                  <Checkbox>记住登录</Checkbox>
-                </Form.Item>
-                <Button type="link">忘记密码</Button>
-              </div>
-            ) : null}
+            <div className="login-tools">
+              <Form.Item name="remember" noStyle valuePropName="checked">
+                <Checkbox>记住登录</Checkbox>
+              </Form.Item>
+              <Button onClick={() => message.info("请联系管理员重置密码")} type="link">
+                忘记密码
+              </Button>
+            </div>
 
             <Button
               block
               className="login-submit"
               htmlType="submit"
               icon={<LoginOutlined />}
+              loading={isSubmitting}
               size="large"
               type="primary"
             >
@@ -175,7 +151,9 @@ export function LoginPage() {
 
           <div className="login-register">
             <span>还没有账号？</span>
-            <Button type="link">注册</Button>
+            <Button onClick={() => message.info("请联系管理员开通账号")} type="link">
+              联系管理员
+            </Button>
           </div>
 
           <Divider className="login-divider">其他登录方式</Divider>
@@ -185,6 +163,7 @@ export function LoginPage() {
               aria-label="微信登录"
               className="wechat-login"
               icon={<WechatOutlined />}
+              onClick={() => message.info("微信登录暂未接入")}
               shape="circle"
               size="large"
             />
