@@ -44,6 +44,10 @@ export async function createMaterialUpload(formData: FormData) {
   return consoleRepository.createMaterialUpload(formData);
 }
 
+export async function getConsoleMaterialFile(id: number) {
+  return consoleRepository.getMaterialFile(id);
+}
+
 export async function getConsoleTagConfig() {
   return consoleRepository.getTagConfig();
 }

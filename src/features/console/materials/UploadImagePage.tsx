@@ -4,7 +4,7 @@ import { useState } from "react";
 import { AppstoreOutlined, ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, CloudUploadOutlined, TagsOutlined } from "@ant-design/icons";
 import { App, Button, Checkbox, Progress, Radio, Select, Space, Steps, Tabs, Tag, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
-import { useGetMaterialUploadOptionsQuery } from "@/store/consoleApi";
+import { useGetMaterialUploadOptionsQuery, useUpdateMaterialTagsMutation } from "@/store/consoleApi";
 import type { MaterialUploadResponse, QuickTagGroup } from "@/shared/types/console";
 
 const emptyUploadOptions: MaterialUploadResponse = {
@@ -29,6 +29,20 @@ const materialStageOptions = [
 
 const { Dragger } = Upload;
 
+type UploadedMaterialFile = {
+  id: number;
+  imageUrl: string;
+  name: string;
+  size: number;
+  status: string;
+  type: string;
+};
+
+type MaterialUploadResult = {
+  files: UploadedMaterialFile[];
+  total: number;
+};
+
 function UploadStepper({ current }: { current: number }) {
   return (
     <Steps
@@ -52,23 +66,79 @@ function formatUploadSize(size: number) {
 }
 
 function QuickTagPanel({
-  groups,
+  attributeGroups,
   onComplete,
-  selectedTags,
-  setSelectedTags,
+  onSkip,
+  selectedAttributeTags,
+  selectedSellingTags,
+  sellingGroups,
+  setSelectedAttributeTags,
+  setSelectedSellingTags,
 }: {
-  groups: QuickTagGroup[];
+  attributeGroups: QuickTagGroup[];
   onComplete: () => void;
-  selectedTags: string[];
-  setSelectedTags: (tags: string[]) => void;
+  onSkip: () => void;
+  selectedAttributeTags: string[];
+  selectedSellingTags: string[];
+  sellingGroups: QuickTagGroup[];
+  setSelectedAttributeTags: (tags: string[]) => void;
+  setSelectedSellingTags: (tags: string[]) => void;
 }) {
+  function renderTagGroups(
+    groups: QuickTagGroup[],
+    selectedTags: string[],
+    setSelectedTags: (tags: string[]) => void,
+  ) {
+    if (groups.length === 0) {
+      return <div className="quick-tag-empty">选项为空</div>;
+    }
+
+    return (
+      <div className="quick-tag-scroll">
+        {groups.map((group) => (
+          <div className="quick-tag-group" key={group.name}>
+            <h3>{group.name}</h3>
+            <div>
+              {group.options.map((option) => {
+                const active = selectedTags.includes(option);
+
+                return (
+                  <button
+                    className={active ? "active" : ""}
+                    key={option}
+                    onClick={() => {
+                      setSelectedTags(
+                        active
+                          ? selectedTags.filter((tag) => tag !== option)
+                          : [...selectedTags, option],
+                      );
+                    }}
+                    type="button"
+                  >
+                    {option}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <aside className="quick-tag-panel">
       <h2>快速打标</h2>
-      <p>点击图片后，选择卖点标签</p>
+      <p>选择卖点和属性标签后保存到素材库</p>
       <div className="selected-tag-row">
         <span>卖点标签：</span>
-        {selectedTags.slice(0, 3).map((tag) => (
+        {selectedSellingTags.slice(0, 3).map((tag) => (
+          <Tag key={tag}>{tag}</Tag>
+        ))}
+      </div>
+      <div className="selected-tag-row">
+        <span>属性标签：</span>
+        {selectedAttributeTags.slice(0, 3).map((tag) => (
           <Tag key={tag}>{tag}</Tag>
         ))}
       </div>
@@ -78,49 +148,19 @@ function QuickTagPanel({
           {
             key: "selling",
             label: "卖点标签",
-            children: (
-              <div className="quick-tag-scroll">
-                {groups.map((group) => (
-                  <div className="quick-tag-group" key={group.name}>
-                    <h3>{group.name}</h3>
-                    <div>
-                      {group.options.map((option) => {
-                        const active = selectedTags.includes(option);
-
-                        return (
-                          <button
-                            className={active ? "active" : ""}
-                            key={option}
-                            onClick={() => {
-                              setSelectedTags(
-                                active
-                                  ? selectedTags.filter((tag) => tag !== option)
-                                  : [...selectedTags, option],
-                              );
-                            }}
-                            type="button"
-                          >
-                            {option}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ),
+            children: renderTagGroups(sellingGroups, selectedSellingTags, setSelectedSellingTags),
           },
           {
             key: "attribute",
             label: "属性标签",
-            children: <div className="quick-tag-empty">选项为空</div>,
+            children: renderTagGroups(attributeGroups, selectedAttributeTags, setSelectedAttributeTags),
           },
         ]}
       />
       <Button block onClick={onComplete} type="primary">
-        保存标签 ({selectedTags.length})
+        保存标签 ({selectedSellingTags.length + selectedAttributeTags.length})
       </Button>
-      <Button block onClick={onComplete}>暂不打标</Button>
+      <Button block onClick={onSkip}>暂不打标</Button>
     </aside>
   );
 }
@@ -128,16 +168,29 @@ function QuickTagPanel({
 export function MaterialUploadImagePage() {
   const { message } = App.useApp();
   const { data = emptyUploadOptions } = useGetMaterialUploadOptionsQuery();
+  const [updateMaterialTags] = useUpdateMaterialTagsMutation();
   const [step, setStep] = useState(0);
   const [taggingMode, setTaggingMode] = useState<"choice" | "tagging">("choice");
   const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>(["二手房溢价能力强"]);
+  const [category, setCategory] = useState("内页图");
+  const [stage, setStage] = useState("待配置");
+  const [platforms, setPlatforms] = useState<string[]>(["小红书", "微信"]);
+  const [selectedAttributeTags, setSelectedAttributeTags] = useState<string[]>([]);
+  const [selectedSellingTags, setSelectedSellingTags] = useState<string[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedMaterialFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSavingTags, setIsSavingTags] = useState(false);
   const selectedFiles = fileList.filter((file) => file.originFileObj);
   const totalSize = selectedFiles.reduce((sum, file) => sum + (file.size ?? 0), 0);
 
   async function startUpload() {
     if (selectedFiles.length === 0) {
       message.warning("请先选择图片");
+      return;
+    }
+
+    if (platforms.length === 0) {
+      message.warning("请至少选择一个平台");
       return;
     }
 
@@ -148,14 +201,71 @@ export function MaterialUploadImagePage() {
         formData.append("images", file.originFileObj);
       }
     });
+    formData.append("category", category);
+    formData.append("stage", stage);
+    platforms.forEach((platform) => formData.append("platforms", platform));
 
-    await fetch("/api/console/materials/upload", {
-      body: formData,
-      method: "POST",
-    });
+    setIsUploading(true);
 
-    setStep(1);
-    message.success("图片已上传");
+    try {
+      const response = await fetch("/api/console/materials/upload", {
+        body: formData,
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("图片上传失败");
+      }
+
+      const result = await response.json() as MaterialUploadResult;
+
+      setUploadedFiles(result.files);
+      setStep(1);
+      message.success(`已上传 ${result.total} 张图片`);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : "图片上传失败");
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  async function saveUploadedTags() {
+    if (uploadedFiles.length === 0) {
+      message.warning("没有可打标的上传素材");
+      return;
+    }
+
+    setIsSavingTags(true);
+
+    try {
+      await Promise.all(uploadedFiles.flatMap((file) => [
+        updateMaterialTags({
+          id: file.id,
+          kind: "selling",
+          tags: selectedSellingTags,
+        }).unwrap(),
+        updateMaterialTags({
+          id: file.id,
+          kind: "attribute",
+          tags: selectedAttributeTags,
+        }).unwrap(),
+      ]));
+      message.success(`已为 ${uploadedFiles.length} 张图片保存标签`);
+      setStep(2);
+    } catch {
+      message.error("标签保存失败");
+    } finally {
+      setIsSavingTags(false);
+    }
+  }
+
+  function resetUpload() {
+    setFileList([]);
+    setUploadedFiles([]);
+    setSelectedAttributeTags([]);
+    setSelectedSellingTags([]);
+    setTaggingMode("choice");
+    setStep(0);
   }
 
   return (
@@ -166,10 +276,25 @@ export function MaterialUploadImagePage() {
         <div className="upload-work-card">
           <Dragger
             accept="image/jpeg,image/png"
-            beforeUpload={() => false}
+            beforeUpload={(file) => {
+              const isImage = ["image/jpeg", "image/png"].includes(file.type);
+              const isUnderLimit = file.size <= 50 * 1024 * 1024;
+
+              if (!isImage) {
+                message.warning(`${file.name} 不是 JPG/PNG 图片`);
+                return Upload.LIST_IGNORE;
+              }
+
+              if (!isUnderLimit) {
+                message.warning(`${file.name} 超过 50MB`);
+                return Upload.LIST_IGNORE;
+              }
+
+              return false;
+            }}
             fileList={fileList}
             multiple
-            onChange={({ fileList: nextFileList }) => setFileList(nextFileList.slice(0, 20))}
+            onChange={({ fileList: nextFileList }) => setFileList(nextFileList.slice(0, 2500))}
             showUploadList={{ showRemoveIcon: true }}
           >
             <div className="material-drop">
@@ -192,19 +317,19 @@ export function MaterialUploadImagePage() {
             <div className="upload-queue-head">
               <h2>上传队列</h2>
               <Space>
-                <span>已上传 {selectedFiles.length} / {selectedFiles.length}</span>
-                <Button disabled={selectedFiles.length === 0} onClick={startUpload}>
+                <span>已选择 {selectedFiles.length} 张</span>
+                <Button disabled={selectedFiles.length === 0} loading={isUploading} onClick={startUpload}>
                   开始上传
                 </Button>
-                <Button onClick={() => setFileList([])}>清空队列</Button>
+                <Button onClick={resetUpload}>清空队列</Button>
               </Space>
             </div>
             <div className="upload-options-grid">
               <div>
                 <p>类型</p>
-                <Radio.Group defaultValue="inside">
-                  <Radio value="inside">内页图</Radio>
-                  <Radio value="poster">海报首图</Radio>
+                <Radio.Group onChange={(event) => setCategory(event.target.value)} value={category}>
+                  <Radio value="内页图">内页图</Radio>
+                  <Radio value="海报首图">海报首图</Radio>
                 </Radio.Group>
               </div>
               <div>
@@ -212,20 +337,22 @@ export function MaterialUploadImagePage() {
                 <Select
                     options={materialStageOptions.map((value) => ({ label: value, value }))}
                     placeholder="请选择"
+                    value={stage === "待配置" ? undefined : stage}
+                    onChange={(value) => setStage(value)}
                 />
               </div>
               <div>
                 <p>平台</p>
-                <Checkbox.Group defaultValue={["xhs", "wechat"]}>
-                  <Checkbox value="xhs">小红书</Checkbox>
-                  <Checkbox value="wechat">微信</Checkbox>
+                <Checkbox.Group onChange={(values) => setPlatforms(values.map(String))} value={platforms}>
+                  <Checkbox value="小红书">小红书</Checkbox>
+                  <Checkbox value="微信">微信</Checkbox>
                 </Checkbox.Group>
               </div>
             </div>
             <div className="upload-progress-row">
               <span>总进度</span>
-              <Progress percent={selectedFiles.length ? 100 : 0} showInfo={false} />
-              <em>{selectedFiles.length ? "100%" : "0%"}</em>
+              <Progress percent={uploadedFiles.length ? 100 : 0} showInfo={false} />
+              <em>{uploadedFiles.length ? "100%" : "0%"}</em>
             </div>
           </div>
         </div>
@@ -243,7 +370,7 @@ export function MaterialUploadImagePage() {
               <TagsOutlined />
               <h3>立即打标</h3>
               <p>现在为上传的图片添加卖点标签，方便后续查找和使用</p>
-              <div>共 {selectedFiles.length} 张图片待打标</div>
+              <div>共 {uploadedFiles.length} 张图片待打标</div>
               <Button block onClick={() => setTaggingMode("tagging")} type="primary">
                 开始打标
               </Button>
@@ -268,22 +395,26 @@ export function MaterialUploadImagePage() {
             <div className="pending-head">
               <div>
                 <h2>待打标图片</h2>
-                <p>共 {selectedFiles.length} 张，已打标 0 张，待处理 {selectedFiles.length} 张</p>
+                <p>共 {uploadedFiles.length} 张，已打标 0 张，待处理 {uploadedFiles.length} 张</p>
               </div>
               <Space>
                 <Button onClick={() => {
-                  message.success(`已为 ${selectedFiles.length} 张图片批量保存标签`);
-                  setStep(2);
-                }} type="primary">
+                  saveUploadedTags();
+                }} loading={isSavingTags} type="primary">
                   批量打标
                 </Button>
                 <Button onClick={() => setStep(2)}>暂不打标</Button>
               </Space>
             </div>
             <div className="pending-image-grid">
-              {selectedFiles.map((file, index) => (
-                <div className="pending-image" key={file.uid}>
-                  <div className="pending-thumb">{index + 1}</div>
+              {uploadedFiles.map((file, index) => (
+                <div className="pending-image" key={file.id}>
+                  <div
+                    className="pending-thumb"
+                    style={{ backgroundImage: `url("${file.imageUrl}")` }}
+                  >
+                    <span>{index + 1}</span>
+                  </div>
                   <strong>{file.name}</strong>
                   <span>待打标</span>
                 </div>
@@ -291,10 +422,14 @@ export function MaterialUploadImagePage() {
             </div>
           </div>
           <QuickTagPanel
-            groups={data.sellingPointGroups}
-            onComplete={() => setStep(2)}
-            selectedTags={selectedTags}
-            setSelectedTags={setSelectedTags}
+            attributeGroups={data.attributeGroups}
+            onComplete={saveUploadedTags}
+            onSkip={() => setStep(2)}
+            selectedAttributeTags={selectedAttributeTags}
+            selectedSellingTags={selectedSellingTags}
+            sellingGroups={data.sellingPointGroups}
+            setSelectedAttributeTags={setSelectedAttributeTags}
+            setSelectedSellingTags={setSelectedSellingTags}
           />
         </div>
       ) : null}
@@ -303,24 +438,20 @@ export function MaterialUploadImagePage() {
         <div className="upload-done-card">
           <CheckCircleOutlined />
           <h2>上传完成!</h2>
-          <p>已成功上传 {selectedFiles.length} 张图片到素材库</p>
+          <p>已成功上传 {uploadedFiles.length} 张图片到素材库</p>
           <div className="done-tip">图片已入库，可随时在素材管理中进行打标和管理</div>
           <Space>
             <Button onClick={() => window.location.assign("/materials")} type="primary">
               查看素材库
             </Button>
-            <Button onClick={() => {
-              setFileList([]);
-              setTaggingMode("choice");
-              setStep(0);
-            }}>
+            <Button onClick={resetUpload}>
               继续上传
             </Button>
           </Space>
           <div className="done-stats">
-            <div><strong>{selectedFiles.length}</strong><span>上传文件数</span></div>
+            <div><strong>{uploadedFiles.length}</strong><span>上传文件数</span></div>
             <div><strong>{formatUploadSize(totalSize)}</strong><span>总文件大小</span></div>
-            <div><strong>{selectedTags.length}</strong><span>打标总数</span></div>
+            <div><strong>{selectedSellingTags.length + selectedAttributeTags.length}</strong><span>打标总数</span></div>
           </div>
         </div>
       ) : null}

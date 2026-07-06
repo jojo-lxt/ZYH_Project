@@ -343,6 +343,7 @@ PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publi
 
 ```text
 materials
+material_files
 material_tags
 config_nodes
 config_node_modes
@@ -361,6 +362,7 @@ draft_images
 
 ```text
 这个脚本只建表和补充缺失字段，不会清空已有数据。
+图片上传后的原图二进制保存在 material_files 表中，素材表 materials.image_url 指向读取原图的 API。
 如果你需要把现有假数据导入数据库，可以后续单独写 seed 脚本。
 ```
 

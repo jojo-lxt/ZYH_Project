@@ -2110,15 +2110,30 @@ textarea {
 }
 
 .pending-thumb {
+  position: relative;
   display: grid;
   width: 220px;
   height: 132px;
   place-items: center;
   border-radius: 8px;
-  background: linear-gradient(145deg, #2f3f46, #111827);
+  background: center / cover no-repeat linear-gradient(145deg, #2f3f46, #111827);
   color: #fff;
   font-size: 32px;
   font-weight: 800;
+  overflow: hidden;
+}
+
+.pending-thumb span {
+  position: absolute;
+  left: 10px;
+  top: 10px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.72);
+  font-size: 13px;
 }
 
 .pending-image strong {

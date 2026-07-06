@@ -42,6 +42,13 @@ type MaterialRow = {
   uploader: string;
 };
 
+type MaterialFileRow = {
+  bytes: Buffer;
+  mime_type: string;
+  original_name: string;
+  size_bytes: number;
+};
+
 type NoteMetricsRow = {
   author: string;
   collects: number;
@@ -283,6 +290,22 @@ function mapMaterial(row: MaterialRow): MaterialItem {
     uploadedAt: formatDateTime(row.uploaded_at),
     uploader: row.uploader,
   };
+}
+
+function getTextFormValue(formData: FormData, key: string) {
+  const value = formData.get(key);
+
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getUploadPlatforms(formData: FormData) {
+  const values = formData
+    .getAll("platforms")
+    .map(String)
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  return values.length ? values : ["小红书", "微信"];
 }
 
 function mapProperty(row: PropertyDbRow): PropertyRow {
@@ -758,28 +781,56 @@ export async function createMaterialUpload(formData: FormData) {
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File);
+  const category = getTextFormValue(formData, "category") || "内页图";
+  const stage = getTextFormValue(formData, "stage") || "待配置";
+  const platforms = getUploadPlatforms(formData);
 
   const uploadedFiles = [];
 
   for (const [index, file] of files.entries()) {
-    const result = await queryOne<{ id: number }>(
-      `
-        INSERT INTO materials (
-          title, category, platforms, size_text, file_size_bytes, stage, tone, uploader,
-          color, accent, uploaded_at, updated_at
-        )
-        VALUES ($1, '未分类', '{}', '-', $2, '待配置', '-', '系统上传', '#d8dee9', '#64748b', now(), now())
-        RETURNING id
-      `,
-      [file.name || `upload-${Date.now()}-${index}`, file.size],
-    );
+    const bytes = Buffer.from(await file.arrayBuffer());
+    const mimeType = file.type || "application/octet-stream";
+    const title = file.name || `upload-${Date.now()}-${index}`;
+    const result = await withTransaction(async (client) => {
+      const materialResult = await client.query<{ id: number }>(
+        `
+          INSERT INTO materials (
+            title, category, platforms, size_text, file_size_bytes, image_url, stage, tone, uploader,
+            color, accent, uploaded_at, updated_at
+          )
+          VALUES ($1, $2, $3, '-', $4, '', $5, '-', '系统上传', '#d8dee9', '#64748b', now(), now())
+          RETURNING id
+        `,
+        [title, category, platforms, file.size, stage],
+      );
+      const id = materialResult.rows[0]?.id;
+
+      if (!id) {
+        throw new Error("素材写入失败");
+      }
+
+      await client.query(
+        `
+          INSERT INTO material_files (material_id, original_name, mime_type, size_bytes, bytes)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        [id, title, mimeType, file.size, bytes],
+      );
+      await client.query(
+        "UPDATE materials SET image_url = $2 WHERE id = $1",
+        [id, `/api/console/materials/${id}/image`],
+      );
+
+      return { id };
+    });
 
     uploadedFiles.push({
-      id: result?.id ? `material-${result.id}` : `upload-${Date.now()}-${index}`,
-      name: file.name,
+      id: result.id,
+      imageUrl: `/api/console/materials/${result.id}/image`,
+      name: title,
       size: file.size,
       status: "uploaded",
-      type: file.type || "application/octet-stream",
+      type: mimeType,
     });
   }
 
@@ -787,6 +838,17 @@ export async function createMaterialUpload(formData: FormData) {
     files: uploadedFiles,
     total: uploadedFiles.length,
   };
+}
+
+export async function getMaterialFile(id: number) {
+  return queryOne<MaterialFileRow>(
+    `
+      SELECT original_name, mime_type, size_bytes, bytes
+      FROM material_files
+      WHERE material_id = $1
+    `,
+    [id],
+  );
 }
 
 export async function updateMaterial(

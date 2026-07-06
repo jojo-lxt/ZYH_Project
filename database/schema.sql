@@ -21,6 +21,15 @@ CREATE INDEX IF NOT EXISTS idx_materials_uploaded_at ON materials (uploaded_at D
 ALTER TABLE IF EXISTS materials ADD COLUMN IF NOT EXISTS file_size_bytes integer NOT NULL DEFAULT 0;
 ALTER TABLE IF EXISTS materials ADD COLUMN IF NOT EXISTS image_url text;
 
+CREATE TABLE IF NOT EXISTS material_files (
+  material_id integer PRIMARY KEY REFERENCES materials(id) ON DELETE CASCADE,
+  original_name text NOT NULL,
+  mime_type text NOT NULL,
+  size_bytes integer NOT NULL,
+  bytes bytea NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS material_tags (
   material_id integer NOT NULL REFERENCES materials(id) ON DELETE CASCADE,
   kind text NOT NULL CHECK (kind IN ('attribute', 'selling')),
