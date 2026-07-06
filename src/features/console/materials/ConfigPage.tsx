@@ -127,6 +127,7 @@ export function ConfigPage({ title }: { title: string }) {
     ],
     [tree],
   );
+  const isModalCreatingSellingPoint = isSellingPoint && Boolean(modalParentId);
 
   function toggleExpanded(id: string) {
     const next = new Set(expandedIds);
@@ -175,16 +176,17 @@ export function ConfigPage({ title }: { title: string }) {
 
   async function handleCreateItem() {
     const name = modalName.trim();
+    const isCreatingSellingPoint = isSellingPoint && Boolean(modalParentId);
 
     if (!name) {
-      message.warning(isSellingPoint ? "请输入卖点" : "请输入标签名称");
+      message.warning(isCreatingSellingPoint ? "请输入卖点" : "请输入分类名称");
       return;
     }
 
     const result = await createConfigItem({
       description: modalDescription.trim() || undefined,
       kind: configKind,
-      modes: isSellingPoint ? ["种草式"] : undefined,
+      modes: isCreatingSellingPoint ? ["种草式"] : undefined,
       name,
       parentId: modalParentId,
     }).unwrap();
@@ -218,7 +220,7 @@ export function ConfigPage({ title }: { title: string }) {
     }
 
     if (!activeDraft.name.trim()) {
-      message.warning(isSellingPoint ? "请输入卖点" : "请输入分类名称");
+      message.warning(isSellingPoint && isChildSelected ? "请输入卖点" : "请输入分类名称");
       return;
     }
 
@@ -226,7 +228,7 @@ export function ConfigPage({ title }: { title: string }) {
       description: activeDraft.description.trim() || undefined,
       id: selected.id,
       kind: configKind,
-      modes: isSellingPoint ? activeDraft.modes : undefined,
+      modes: isSellingPoint && isChildSelected ? activeDraft.modes : undefined,
       name: activeDraft.name.trim(),
     }).unwrap();
     message.success("已保存当前配置");
@@ -353,7 +355,9 @@ export function ConfigPage({ title }: { title: string }) {
                 <div>
                   <h2>
                     {isSellingPoint
-                      ? "编辑二级分类"
+                      ? isChildSelected
+                        ? "编辑卖点"
+                        : "编辑一级分类"
                       : isChildSelected
                         ? "编辑二级分类"
                         : "编辑一级分类"}
@@ -361,11 +365,11 @@ export function ConfigPage({ title }: { title: string }) {
                   <p>点击左侧标签进行编辑，或添加新标签</p>
                 </div>
                 <Button danger={isSellingPoint} onClick={() => handleDeleteItem(selected.id)} type="primary">
-                  {isSellingPoint ? "删除卖点" : "删除分类"}
+                  {isSellingPoint && isChildSelected ? "删除卖点" : "删除分类"}
                 </Button>
               </div>
 
-              {isSellingPoint ? (
+              {isSellingPoint && isChildSelected ? (
                 <>
                   <label className="taxonomy-field">
                     <span>卖点</span>
@@ -403,7 +407,7 @@ export function ConfigPage({ title }: { title: string }) {
                   </label>
                   {!isChildSelected ? (
                     <div className="taxonomy-field">
-                      <span>子标签管理</span>
+                      <span>{isSellingPoint ? "卖点管理" : "子标签管理"}</span>
                       <div className="taxonomy-sub-list">
                         {(selected.children ?? []).map((child) => (
                           <div key={child.id}>
@@ -419,7 +423,7 @@ export function ConfigPage({ title }: { title: string }) {
                           </div>
                         ))}
                         <Button block onClick={() => openCreateModal(selected.id)}>
-                          添加子标签
+                          {isSellingPoint ? "添加卖点" : "添加子标签"}
                         </Button>
                       </div>
                     </div>
@@ -464,8 +468,8 @@ export function ConfigPage({ title }: { title: string }) {
             />
           </label>
           <label>
-            <span>* {isSellingPoint ? "卖点" : "标签名称"}</span>
-            {isSellingPoint ? (
+            <span>* {isModalCreatingSellingPoint ? "卖点" : "分类名称"}</span>
+            {isModalCreatingSellingPoint ? (
               <Input.TextArea
                 autoSize={{ minRows: 4, maxRows: 6 }}
                 onChange={(event) => setModalName(event.target.value)}
@@ -480,7 +484,7 @@ export function ConfigPage({ title }: { title: string }) {
               />
             )}
           </label>
-          {!isSellingPoint ? (
+          {!isModalCreatingSellingPoint ? (
             <label>
               <span>描述（可选）</span>
               <Input.TextArea

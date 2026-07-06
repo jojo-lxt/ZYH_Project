@@ -12,6 +12,21 @@ const emptyUploadOptions: MaterialUploadResponse = {
   sellingPointGroups: [],
 };
 
+const materialStageOptions = [
+    "交付和口碑期",
+    "亮相开放前",
+    "现房在售期",
+    "诚意登记期",
+    "专项营销活动",
+    "尾盘与清盘期",
+    "横沔和泗青公园专题笔记",
+    "张江金茂府品质交付",
+    "区域价值",
+    "配套价值",
+    "产品力价值",
+    "地段价值",
+];
+
 const { Dragger } = Upload;
 
 function UploadStepper({ current }: { current: number }) {
@@ -195,11 +210,8 @@ export function MaterialUploadImagePage() {
               <div>
                 <p>营销阶段</p>
                 <Select
-                  options={[
-                    { label: "交付和口碑期", value: "delivery" },
-                    { label: "强销期", value: "sales" },
-                  ]}
-                  placeholder="请选择"
+                    options={materialStageOptions.map((value) => ({ label: value, value }))}
+                    placeholder="请选择"
                 />
               </div>
               <div>

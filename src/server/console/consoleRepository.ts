@@ -4,11 +4,16 @@ import { hashPassword } from "@/server/auth/password";
 import { query, queryOne, queryRows, withTransaction } from "@/server/db";
 import type {
   ConfigTreeItem,
+  ConsoleContentType,
   ConsoleConfigResponse,
   ConsoleMaterialsResponse,
+  ConsoleOverviewQuery,
   ConsoleOverviewResponse,
+  ConsoleOwnerType,
+  ConsolePlatform,
   ConsolePropertiesResponse,
   ConsolePropertyDetailResponse,
+  ConsoleStrategyQuery,
   ConsoleStrategyResponse,
   ConsoleUsersResponse,
   MaterialItem,
@@ -37,13 +42,31 @@ type MaterialRow = {
   uploader: string;
 };
 
-type NoteRow = {
+type NoteMetricsRow = {
   author: string;
+  collects: number;
+  comments: number;
+  exposure_count: number;
   id: string;
   likes: number;
   params: string[];
   published_at: Date | string;
+  shares: number;
   title: string;
+};
+
+type NoteStrategyRow = Pick<
+  NoteMetricsRow,
+  "collects" | "comments" | "exposure_count" | "likes" | "params" | "shares"
+>;
+
+type NotesColumnInfo = {
+  collects?: string;
+  comments?: string;
+  contentType?: string;
+  ownerType?: string;
+  platform?: string;
+  shares?: string;
 };
 
 type ConfigNodeRow = {
@@ -100,6 +123,145 @@ function formatDateTime(value: Date | string) {
     ":",
     pad(date.getSeconds()),
   ].join("");
+}
+
+function formatInteger(value: number) {
+  return new Intl.NumberFormat("zh-CN").format(value);
+}
+
+function formatExposure(value: number) {
+  if (value >= 10000) {
+    const wan = value / 10000;
+    const formatted = Number.isInteger(wan) ? String(wan) : wan.toFixed(1);
+
+    return `${formatted}W`;
+  }
+
+  return formatInteger(value);
+}
+
+function quoteIdent(value: string) {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+function metricExpression(column?: string) {
+  return column ? `COALESCE(${quoteIdent(column)}, 0)` : "0";
+}
+
+function interactionExpression(columns: NotesColumnInfo) {
+  return [
+    "COALESCE(likes, 0)",
+    metricExpression(columns.comments),
+    metricExpression(columns.collects),
+    metricExpression(columns.shares),
+  ].join(" + ");
+}
+
+function findColumn(columnNames: Set<string>, candidates: string[]) {
+  return candidates.find((column) => columnNames.has(column));
+}
+
+async function getNotesColumnInfo(): Promise<NotesColumnInfo> {
+  const rows = await queryRows<{ column_name: string }>(
+    `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'notes'
+    `,
+  );
+  const columnNames = new Set(rows.map((row) => row.column_name));
+
+  return {
+    collects: findColumn(columnNames, ["collects", "collect_count", "favorites", "favorite_count"]),
+    comments: findColumn(columnNames, ["comments", "comment_count"]),
+    contentType: findColumn(columnNames, ["content_type", "note_type", "media_type"]),
+    ownerType: findColumn(columnNames, ["owner_type", "author_type", "sender_type"]),
+    platform: findColumn(columnNames, ["platform", "channel", "channel_type"]),
+    shares: findColumn(columnNames, ["shares", "share_count"]),
+  };
+}
+
+function platformValues(platform: ConsolePlatform) {
+  return platform === "xhs" ? ["xhs", "小红书", "redbook"] : ["wechat", "微信"];
+}
+
+function contentTypeValues(contentType: ConsoleContentType) {
+  return contentType === "image"
+    ? ["image", "图文", "图文笔记", "article"]
+    : ["video", "视频", "视频脚本"];
+}
+
+function ownerTypeValues(ownerType: ConsoleOwnerType) {
+  const values = {
+    agent: ["agent", "中介", "中介笔记"],
+    guest: ["guest", "游客", "游客笔记"],
+    personal: ["personal", "个人", "个人笔记"],
+  } satisfies Record<ConsoleOwnerType, string[]>;
+
+  return values[ownerType];
+}
+
+function isDateText(value?: string) {
+  return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
+}
+
+function buildNotesWhere(filters: ConsoleOverviewQuery, columns: NotesColumnInfo) {
+  const clauses: string[] = [];
+  const values: unknown[] = [];
+
+  function addArrayFilter(column: string | undefined, filterValues: string[]) {
+    if (!column) {
+      return;
+    }
+
+    values.push(filterValues);
+    clauses.push(`${quoteIdent(column)} = ANY($${values.length}::text[])`);
+  }
+
+  if (filters.platform) {
+    addArrayFilter(columns.platform, platformValues(filters.platform));
+  }
+
+  if (filters.contentType) {
+    addArrayFilter(columns.contentType, contentTypeValues(filters.contentType));
+  }
+
+  if (filters.ownerType) {
+    addArrayFilter(columns.ownerType, ownerTypeValues(filters.ownerType));
+  }
+
+  if (isDateText(filters.dateFrom)) {
+    values.push(filters.dateFrom);
+    clauses.push(`published_at >= $${values.length}::date`);
+  }
+
+  if (isDateText(filters.dateTo)) {
+    values.push(filters.dateTo);
+    clauses.push(`published_at < ($${values.length}::date + INTERVAL '1 day')`);
+  }
+
+  return {
+    values,
+    where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "",
+  };
+}
+
+function getParamValue(params: string[], key: "人设" | "情绪" | "模式") {
+  for (const item of params) {
+    const normalized = item.replace("：", ":");
+    const prefix = `${key}:`;
+
+    if (normalized.startsWith(prefix)) {
+      return normalized.slice(prefix.length).trim() || "未标注";
+    }
+  }
+
+  return "未标注";
+}
+
+function toInteractionTotal(note: NoteStrategyRow) {
+  return note.likes + note.comments + note.collects + note.shares;
 }
 
 function mapMaterial(row: MaterialRow): MaterialItem {
@@ -225,60 +387,266 @@ function toQuickGroups(tree: ConfigTreeItem[]): QuickTagGroup[] {
   }));
 }
 
-export async function getOverview(): Promise<ConsoleOverviewResponse> {
-  const notes = await queryRows<NoteRow>(
+export async function getOverview(filters: ConsoleOverviewQuery = {}): Promise<ConsoleOverviewResponse> {
+  const columns = await getNotesColumnInfo();
+  const { values, where } = buildNotesWhere(filters, columns);
+  const commentsExpr = metricExpression(columns.comments);
+  const collectsExpr = metricExpression(columns.collects);
+  const sharesExpr = metricExpression(columns.shares);
+  const interactionsExpr = interactionExpression(columns);
+  const notes = await queryRows<NoteMetricsRow>(
     `
-      SELECT id, title, author, params, published_at, likes
+      SELECT
+        id,
+        title,
+        author,
+        params,
+        published_at,
+        COALESCE(likes, 0)::int AS likes,
+        COALESCE(exposure_count, 0)::int AS exposure_count,
+        ${commentsExpr}::int AS comments,
+        ${collectsExpr}::int AS collects,
+        ${sharesExpr}::int AS shares
       FROM notes
+      ${where}
       ORDER BY published_at DESC
       LIMIT 10
     `,
+    values,
   );
-  const [noteCount, exposureCount, interactionCount, rankAuthors, rankInteractions] = await Promise.all([
-    queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM notes"),
-    queryOne<{ count: string }>("SELECT COALESCE(SUM(exposure_count), 0)::text AS count FROM notes"),
-    queryOne<{ count: string }>("SELECT COALESCE(SUM(likes), 0)::text AS count FROM notes"),
+  const [noteCount, exposureCount, interactionCount, rankAuthors, rankInteractions, trend] = await Promise.all([
+    queryOne<{ count: string }>(`SELECT COUNT(*)::text AS count FROM notes ${where}`, values),
+    queryOne<{ count: string }>(
+      `SELECT COALESCE(SUM(exposure_count), 0)::text AS count FROM notes ${where}`,
+      values,
+    ),
+    queryOne<{ count: string }>(
+      `SELECT COALESCE(SUM(${interactionsExpr}), 0)::text AS count FROM notes ${where}`,
+      values,
+    ),
     queryRows<{ count: number; name: string }>(
       `
         SELECT author AS name, COUNT(*)::int AS count
         FROM notes
+        ${where}
         GROUP BY author
         ORDER BY count DESC, author
         LIMIT 5
       `,
+      values,
     ),
     queryRows<{ count: number; name: string }>(
       `
-        SELECT author AS name, COALESCE(SUM(likes), 0)::int AS count
+        SELECT author AS name, COALESCE(SUM(${interactionsExpr}), 0)::int AS count
         FROM notes
+        ${where}
         GROUP BY author
         ORDER BY count DESC, author
         LIMIT 5
       `,
+      values,
+    ),
+    queryRows<{
+      collects: number;
+      comments: number;
+      date: string;
+      exposure_count: number;
+      interactions: number;
+      likes: number;
+      note_count: number;
+      shares: number;
+    }>(
+      `
+        SELECT
+          to_char(date_trunc('day', published_at), 'YYYY-MM-DD') AS date,
+          COUNT(*)::int AS note_count,
+          COALESCE(SUM(exposure_count), 0)::int AS exposure_count,
+          COALESCE(SUM(likes), 0)::int AS likes,
+          COALESCE(SUM(${commentsExpr}), 0)::int AS comments,
+          COALESCE(SUM(${collectsExpr}), 0)::int AS collects,
+          COALESCE(SUM(${sharesExpr}), 0)::int AS shares,
+          COALESCE(SUM(${interactionsExpr}), 0)::int AS interactions
+        FROM notes
+        ${where}
+        GROUP BY date_trunc('day', published_at)
+        ORDER BY date_trunc('day', published_at)
+      `,
+      values,
     ),
   ]);
+  const noteCountValue = Number(noteCount?.count ?? 0);
+  const exposureCountValue = Number(exposureCount?.count ?? 0);
+  const interactionCountValue = Number(interactionCount?.count ?? 0);
 
   return {
     notes: notes.map((note) => ({
       author: note.author,
+      collects: note.collects,
+      comments: note.comments,
+      exposureCount: note.exposure_count,
       key: note.id,
       likes: note.likes,
       params: note.params ?? [],
       publishedAt: formatDateTime(note.published_at),
+      shares: note.shares,
       title: note.title,
     })),
     rankAuthors,
     rankInteractions,
     stats: [
-      { label: "总笔记数量", trend: "来自数据库", value: noteCount?.count ?? "0" },
-      { label: "总曝光量", trend: "来自数据库", value: exposureCount?.count ?? "0" },
-      { label: "总互动数", trend: "来自点赞汇总", value: interactionCount?.count ?? "0" },
+      { label: "总笔记数量", trend: "来自数据库", value: formatInteger(noteCountValue) },
+      { label: "总曝光量", trend: "来自数据库", value: formatExposure(exposureCountValue) },
+      { label: "总互动数", trend: "点赞/评论/收藏/分享", value: formatInteger(interactionCountValue) },
     ],
+    trend: trend.map((point) => ({
+      collects: point.collects,
+      comments: point.comments,
+      date: point.date,
+      exposureCount: point.exposure_count,
+      interactions: point.interactions,
+      likes: point.likes,
+      noteCount: point.note_count,
+      shares: point.shares,
+    })),
   };
 }
 
-export async function getStrategy(): Promise<ConsoleStrategyResponse> {
-  const [heatRows, keywords] = await Promise.all([
+function formatPercent(value: number) {
+  return `${Number.isInteger(value) ? value.toFixed(0) : value.toFixed(1)}%`;
+}
+
+function getFallbackHeatmap(heatRows: ConsoleStrategyResponse["heatRows"]) {
+  return {
+    columns: ["模拟客户", "置业顾问"],
+    rows: heatRows.map((row) => row.label),
+    values: heatRows.flatMap((row, yIndex) => [
+      [0, yIndex, Number.parseFloat(row.left) || 0] as [number, number, number],
+      [1, yIndex, Number.parseFloat(row.right) || 0] as [number, number, number],
+    ]),
+  };
+}
+
+function getGeneratedHeatRows(
+  columns: string[],
+  rows: string[],
+  values: Array<[number, number, number]>,
+): ConsoleStrategyResponse["heatRows"] {
+  return rows.map((label, yIndex) => {
+    const left = values.find(([x, y]) => x === 0 && y === yIndex)?.[2] ?? 0;
+    const right = values.find(([x, y]) => x === 1 && y === yIndex)?.[2] ?? 0;
+
+    return {
+      label,
+      left: columns[0] ? formatPercent(left) : "-",
+      leftWidth: `${Math.max(left, 8)}%`,
+      right: columns[1] ? formatPercent(right) : "-",
+      rightWidth: `${Math.max(right, 8)}%`,
+    };
+  });
+}
+
+function buildStrategyResponse(
+  notes: NoteStrategyRow[],
+  fallbackHeatRows: ConsoleStrategyResponse["heatRows"],
+  keywords: ConsoleStrategyResponse["keywords"],
+): ConsoleStrategyResponse {
+  const personaMap = new Map<string, { exposure: number; interactions: number; noteCount: number }>();
+  const modeMap = new Map<string, { collects: number; comments: number; likes: number; shares: number }>();
+  const sentimentMap = new Map<string, number>();
+  const comboMap = new Map<string, Map<string, number>>();
+
+  notes.forEach((note) => {
+    const params = note.params ?? [];
+    const persona = getParamValue(params, "人设");
+    const mode = getParamValue(params, "模式");
+    const sentiment = getParamValue(params, "情绪");
+    const rowKey = `${mode}-${sentiment}`;
+    const interactions = toInteractionTotal(note);
+    const personaValue = personaMap.get(persona) ?? { exposure: 0, interactions: 0, noteCount: 0 };
+    const modeValue = modeMap.get(mode) ?? { collects: 0, comments: 0, likes: 0, shares: 0 };
+    const comboValue = comboMap.get(rowKey) ?? new Map<string, number>();
+
+    personaMap.set(persona, {
+      exposure: personaValue.exposure + note.exposure_count,
+      interactions: personaValue.interactions + interactions,
+      noteCount: personaValue.noteCount + 1,
+    });
+    modeMap.set(mode, {
+      collects: modeValue.collects + note.collects,
+      comments: modeValue.comments + note.comments,
+      likes: modeValue.likes + note.likes,
+      shares: modeValue.shares + note.shares,
+    });
+    sentimentMap.set(sentiment, (sentimentMap.get(sentiment) ?? 0) + 1);
+    comboValue.set(persona, (comboValue.get(persona) ?? 0) + interactions);
+    comboMap.set(rowKey, comboValue);
+  });
+
+  const personaEffect = Array.from(personaMap.entries())
+    .map(([label, value]) => ({
+      interactionRate: value.exposure > 0
+        ? Number(((value.interactions / value.exposure) * 100).toFixed(2))
+        : Number((value.interactions / Math.max(value.noteCount, 1)).toFixed(2)),
+      label,
+      noteCount: value.noteCount,
+    }))
+    .sort((a, b) => b.noteCount - a.noteCount)
+    .slice(0, 6);
+  const modeEffect = Array.from(modeMap.entries())
+    .map(([label, value]) => ({ label, ...value }))
+    .sort((a, b) => (b.likes + b.collects + b.comments + b.shares) - (a.likes + a.collects + a.comments + a.shares))
+    .slice(0, 6);
+  const sentimentEffect = Array.from(sentimentMap.entries())
+    .map(([label, count]) => ({ count, label }))
+    .sort((a, b) => b.count - a.count);
+  const columns = personaEffect.map((item) => item.label).slice(0, 4);
+  const rows = Array.from(comboMap.entries())
+    .map(([label, values]) => ({
+      label,
+      total: Array.from(values.values()).reduce((sum, value) => sum + value, 0),
+      values,
+    }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6);
+  const heatmap = rows.length && columns.length
+    ? {
+      columns,
+      rows: rows.map((row) => row.label),
+      values: rows.flatMap((row, yIndex) => {
+        const rowMax = Math.max(...columns.map((column) => row.values.get(column) ?? 0), 1);
+
+        return columns.map((column, xIndex) => [
+          xIndex,
+          yIndex,
+          Number((((row.values.get(column) ?? 0) / rowMax) * 100).toFixed(1)),
+        ] as [number, number, number]);
+      }),
+    }
+    : getFallbackHeatmap(fallbackHeatRows);
+
+  return {
+    heatRows: rows.length
+      ? getGeneratedHeatRows(heatmap.columns, heatmap.rows, heatmap.values)
+      : fallbackHeatRows,
+    heatmap,
+    keywordHeat: keywords.slice(0, 5).map((item) => ({
+      label: item.label,
+      segments: [{ label: "互动数", value: item.count }],
+    })),
+    keywords,
+    modeEffect,
+    personaEffect,
+    sentimentEffect,
+  };
+}
+
+export async function getStrategy(filters: ConsoleStrategyQuery = {}): Promise<ConsoleStrategyResponse> {
+  const columns = await getNotesColumnInfo();
+  const { values, where } = buildNotesWhere(filters, columns);
+  const commentsExpr = metricExpression(columns.comments);
+  const collectsExpr = metricExpression(columns.collects);
+  const sharesExpr = metricExpression(columns.shares);
+  const [heatRows, keywords, notes] = await Promise.all([
     queryRows<{
       label: string;
       left: string;
@@ -299,10 +667,26 @@ export async function getStrategy(): Promise<ConsoleStrategyResponse> {
         ORDER BY sort_order, count DESC, label
       `,
     ),
+    queryRows<NoteStrategyRow>(
+      `
+        SELECT
+          params,
+          COALESCE(likes, 0)::int AS likes,
+          COALESCE(exposure_count, 0)::int AS exposure_count,
+          ${commentsExpr}::int AS comments,
+          ${collectsExpr}::int AS collects,
+          ${sharesExpr}::int AS shares
+        FROM notes
+        ${where}
+        ORDER BY published_at DESC
+      `,
+      values,
+    ),
   ]);
 
-  return {
-    heatRows: heatRows.map((row) => ({
+  return buildStrategyResponse(
+    notes,
+    heatRows.map((row) => ({
       label: row.label,
       left: row.left,
       leftWidth: row.left_width,
@@ -310,7 +694,7 @@ export async function getStrategy(): Promise<ConsoleStrategyResponse> {
       rightWidth: row.right_width,
     })),
     keywords,
-  };
+  );
 }
 
 export async function getMaterials(): Promise<ConsoleMaterialsResponse> {
@@ -479,7 +863,7 @@ export async function getSellingPointConfig(): Promise<ConsoleConfigResponse> {
   const tree = buildConfigTree(await getConfigRows("selling_point"));
 
   return {
-    allowPrimaryCreate: false,
+    allowPrimaryCreate: true,
     modeOptions: ["对比式", "晒单式", "盘点式", "求助式", "种草式"],
     stats: getConfigStats(tree),
     title: "图片卖点配置",

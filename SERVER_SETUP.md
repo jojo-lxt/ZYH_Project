@@ -360,7 +360,7 @@ draft_images
 说明：
 
 ```text
-这个脚本只建表，不导入假数据。
+这个脚本只建表和补充缺失字段，不会清空已有数据。
 如果你需要把现有假数据导入数据库，可以后续单独写 seed 脚本。
 ```
 
@@ -373,17 +373,11 @@ PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publi
   -v admin_phone="<管理员手机号>" \
   -v admin_name="<管理员姓名>" \
   -v admin_property="<管理员默认项目>" \
-  -v admin_password_hash="${ADMIN_PASSWORD_HASH}" <<'SQL'
-INSERT INTO console_users (id, name, phone, role, property, password_hash, status)
-VALUES ('admin-' || :'admin_phone', :'admin_name', :'admin_phone', '管理员', :'admin_property', :'admin_password_hash', 'active')
-ON CONFLICT (phone) DO UPDATE SET
-  name = EXCLUDED.name,
-  role = EXCLUDED.role,
-  property = EXCLUDED.property,
-  password_hash = EXCLUDED.password_hash,
-  status = 'active';
-SQL
+  -v admin_password_hash="${ADMIN_PASSWORD_HASH}" \
+  -f database/seed-admin.sql
 ```
+
+`database/seed-admin.sql` 使用 `ON CONFLICT (phone) DO UPDATE`，可以重复执行；已存在同手机号管理员时会更新姓名、项目、密码 hash 和状态，不会插入重复账号。
 
 验证管理员账号已写入：
 

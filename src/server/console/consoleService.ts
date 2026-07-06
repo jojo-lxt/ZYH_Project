@@ -1,11 +1,12 @@
 import * as consoleRepository from "@/server/console/consoleRepository";
+import type { ConsoleOverviewQuery, ConsoleStrategyQuery } from "@/shared/types/console";
 
-export async function getConsoleOverview() {
-  return consoleRepository.getOverview();
+export async function getConsoleOverview(filters: ConsoleOverviewQuery = {}) {
+  return consoleRepository.getOverview(filters);
 }
 
-export async function getConsoleStrategy() {
-  return consoleRepository.getStrategy();
+export async function getConsoleStrategy(filters: ConsoleStrategyQuery = {}) {
+  return consoleRepository.getStrategy(filters);
 }
 
 export async function getConsoleMaterials() {

@@ -1,9 +1,11 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type {
   ConsoleConfigResponse,
+  ConsoleOverviewQuery,
   ConsoleOverviewResponse,
   ConsolePropertiesResponse,
   ConsolePropertyDetailResponse,
+  ConsoleStrategyQuery,
   ConsoleStrategyResponse,
   ConsoleUsersResponse,
   MaterialItem,
@@ -16,6 +18,20 @@ type ConfigKind = "selling" | "tag";
 
 function configBasePath(kind: ConfigKind) {
   return kind === "selling" ? "/config/selling-points" : "/config/tags";
+}
+
+function toSearchParams(params?: ConsoleOverviewQuery | ConsoleStrategyQuery | void) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params ?? {}).forEach(([key, value]) => {
+    if (value) {
+      searchParams.set(key, value);
+    }
+  });
+
+  const query = searchParams.toString();
+
+  return query ? `?${query}` : "";
 }
 
 export const consoleApi = createApi({
@@ -106,9 +122,9 @@ export const consoleApi = createApi({
       providesTags: ["Materials"],
       query: () => "/materials",
     }),
-    getOverview: builder.query<ConsoleOverviewResponse, void>({
+    getOverview: builder.query<ConsoleOverviewResponse, ConsoleOverviewQuery | void>({
       providesTags: ["Overview"],
-      query: () => "/overview",
+      query: (params) => `/overview${toSearchParams(params)}`,
     }),
     getProperties: builder.query<ConsolePropertiesResponse, void>({
       providesTags: ["Properties"],
@@ -122,9 +138,9 @@ export const consoleApi = createApi({
       providesTags: ["SellingConfig"],
       query: () => "/config/selling-points",
     }),
-    getStrategy: builder.query<ConsoleStrategyResponse, void>({
+    getStrategy: builder.query<ConsoleStrategyResponse, ConsoleStrategyQuery | void>({
       providesTags: ["Strategy"],
-      query: () => "/strategy",
+      query: (params) => `/strategy${toSearchParams(params)}`,
     }),
     getTagConfig: builder.query<ConsoleConfigResponse, void>({
       providesTags: ["TagConfig"],

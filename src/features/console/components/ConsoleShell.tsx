@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -80,10 +80,28 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
   const isMaterialsRoute = pathname.startsWith("/materials");
   const [openKeys, setOpenKeys] = useState(["module", "config"]);
   const { data: propertiesData } = useGetPropertiesQuery();
-  const projectOptions = (propertiesData?.properties ?? []).map((property) => ({
-    label: property.name,
-    value: property.name,
-  }));
+  const projectOptions = useMemo(() => {
+    const options = (propertiesData?.properties ?? []).map((property) => ({
+      label: property.name,
+      value: property.name,
+    }));
+    const userProperty = currentUser.property.trim();
+
+    if (userProperty && userProperty !== "-" && !options.some((item) => item.value === userProperty)) {
+      return [{ label: userProperty, value: userProperty }, ...options];
+    }
+
+    return options;
+  }, [currentUser.property, propertiesData?.properties]);
+  const selectedProject = currentProject && projectOptions.some((item) => item.value === currentProject)
+    ? currentProject
+    : projectOptions[0]?.value ?? "";
+
+  useEffect(() => {
+    if (selectedProject && selectedProject !== currentProject) {
+      dispatch(setCurrentProject(selectedProject));
+    }
+  }, [currentProject, dispatch, selectedProject]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -181,7 +199,7 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
             onChange={(value) => dispatch(setCurrentProject(value))}
             options={projectOptions}
             placeholder="请选择项目"
-            value={currentProject || undefined}
+            value={selectedProject || undefined}
           />
 
           {isMaterialsRoute ? (

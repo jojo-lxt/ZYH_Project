@@ -4,9 +4,26 @@ export type ConsoleStat = {
   value: string;
 };
 
+export type ConsolePlatform = "wechat" | "xhs";
+
+export type ConsoleContentType = "image" | "video";
+
+export type ConsoleOwnerType = "agent" | "guest" | "personal";
+
 export type RankItem = {
   count: number;
   name: string;
+};
+
+export type OverviewTrendPoint = {
+  collects: number;
+  comments: number;
+  date: string;
+  exposureCount: number;
+  interactions: number;
+  likes: number;
+  noteCount: number;
+  shares: number;
 };
 
 export type MaterialItem = {
@@ -34,7 +51,11 @@ export type NoteRow = {
   author: string;
   params: string[];
   publishedAt: string;
+  collects: number;
+  comments: number;
+  exposureCount: number;
   likes: number;
+  shares: number;
 };
 
 export type PropertyRow = {
@@ -81,6 +102,7 @@ export type ConsoleOverviewResponse = {
   rankAuthors: RankItem[];
   rankInteractions: RankItem[];
   stats: ConsoleStat[];
+  trend: OverviewTrendPoint[];
 };
 
 export type ConsoleStrategyResponse = {
@@ -94,8 +116,48 @@ export type ConsoleStrategyResponse = {
   keywords: Array<{
     count: number;
     label: string;
+    noteCount?: number;
+    rate?: number;
+  }>;
+  heatmap: {
+    columns: string[];
+    rows: string[];
+    values: Array<[number, number, number]>;
+  };
+  keywordHeat: Array<{
+    label: string;
+    segments: Array<{
+      label: string;
+      value: number;
+    }>;
+  }>;
+  modeEffect: Array<{
+    collects: number;
+    comments: number;
+    label: string;
+    likes: number;
+    shares: number;
+  }>;
+  personaEffect: Array<{
+    interactionRate: number;
+    label: string;
+    noteCount: number;
+  }>;
+  sentimentEffect: Array<{
+    count: number;
+    label: string;
   }>;
 };
+
+export type ConsoleOverviewQuery = {
+  contentType?: ConsoleContentType;
+  dateFrom?: string;
+  dateTo?: string;
+  ownerType?: ConsoleOwnerType;
+  platform?: ConsolePlatform;
+};
+
+export type ConsoleStrategyQuery = Omit<ConsoleOverviewQuery, "ownerType">;
 
 export type ConsoleMaterialsResponse = {
   filterGroups: string[];

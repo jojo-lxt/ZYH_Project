@@ -20,7 +20,11 @@ export const mockNotes: NoteRow[] = [
     author: "陆伟峰",
     params: ["人设: 置业顾问", "模式: 种草式", "情绪: 中性"],
     publishedAt: "2026-06-09 06:46:57",
+    collects: 0,
+    comments: 0,
+    exposureCount: 118300,
     likes: 8,
+    shares: 0,
   },
   {
     key: "2",
@@ -28,7 +32,11 @@ export const mockNotes: NoteRow[] = [
     author: "张丽洁",
     params: ["人设: 业主视角", "模式: 对比式", "情绪: 积极"],
     publishedAt: "2026-06-08 21:18:47",
+    collects: 0,
+    comments: 0,
+    exposureCount: 94600,
     likes: 6,
+    shares: 0,
   },
   {
     key: "3",
@@ -36,7 +44,11 @@ export const mockNotes: NoteRow[] = [
     author: "周天一",
     params: ["人设: 生活家", "模式: 场景式", "情绪: 中性"],
     publishedAt: "2026-06-08 13:29:04",
+    collects: 0,
+    comments: 0,
+    exposureCount: 103800,
     likes: 11,
+    shares: 0,
   },
   {
     key: "4",
@@ -44,7 +56,11 @@ export const mockNotes: NoteRow[] = [
     author: "杜家臣",
     params: ["人设: 模拟客户", "模式: 口碑式", "情绪: 温和"],
     publishedAt: "2026-06-08 10:03:16",
+    collects: 0,
+    comments: 0,
+    exposureCount: 76800,
     likes: 3,
+    shares: 0,
   },
 ];
 
@@ -228,6 +244,48 @@ export const mockOverviewData: ConsoleOverviewResponse = {
     { label: "总曝光量", trend: "较上周 +0.2%", value: "1183W" },
     { label: "总互动数", trend: "较上周 +3.1%", value: "2,303" },
   ],
+  trend: [
+    {
+      collects: 0,
+      comments: 0,
+      date: "2026-06-06",
+      exposureCount: 1176000,
+      interactions: 18,
+      likes: 18,
+      noteCount: 2,
+      shares: 0,
+    },
+    {
+      collects: 0,
+      comments: 0,
+      date: "2026-06-07",
+      exposureCount: 1179000,
+      interactions: 20,
+      likes: 20,
+      noteCount: 3,
+      shares: 0,
+    },
+    {
+      collects: 0,
+      comments: 0,
+      date: "2026-06-08",
+      exposureCount: 1181500,
+      interactions: 20,
+      likes: 20,
+      noteCount: 3,
+      shares: 0,
+    },
+    {
+      collects: 0,
+      comments: 0,
+      date: "2026-06-09",
+      exposureCount: 1183000,
+      interactions: 8,
+      likes: 8,
+      noteCount: 1,
+      shares: 0,
+    },
+  ],
 };
 
 export const mockStrategyData: ConsoleStrategyResponse = {
@@ -254,12 +312,52 @@ export const mockStrategyData: ConsoleStrategyResponse = {
       rightWidth: "85%",
     },
   ],
+  heatmap: {
+    columns: ["模拟客户", "置业顾问"],
+    rows: ["种草式-中性", "对比式-中性", "盘点式-中性"],
+    values: [
+      [0, 0, 100],
+      [1, 0, 74.2],
+      [0, 1, 66.7],
+      [1, 1, 100],
+    ],
+  },
+  keywordHeat: [
+    {
+      label: "品牌价值",
+      segments: [
+        { label: "种草式", value: 4 },
+        { label: "对比式", value: 3 },
+        { label: "盘点式", value: 2 },
+      ],
+    },
+    {
+      label: "产品力价值",
+      segments: [
+        { label: "种草式", value: 8 },
+        { label: "对比式", value: 5 },
+        { label: "盘点式", value: 4 },
+      ],
+    },
+  ],
   keywords: [
-    { count: 20, label: "开车 15 分钟到达核心商圈，约 30 分钟通勤重点区域" },
-    { count: 12, label: "张江改善客群的低门槛选择" },
-    { count: 11, label: "英迪格酒店入驻片区，对板块价值是长期利好" },
-    { count: 11, label: "900 万预算买四房，改善家庭一步到位" },
-    { count: 7, label: "纯洋房小区，楼间距更舒适" },
+    { count: 20, label: "开车 15 分钟到达核心商圈，约 30 分钟通勤重点区域", noteCount: 10, rate: 90 },
+    { count: 12, label: "张江改善客群的低门槛选择", noteCount: 11, rate: 81.8 },
+    { count: 11, label: "英迪格酒店入驻片区，对板块价值是长期利好", noteCount: 4, rate: 100 },
+    { count: 11, label: "900 万预算买四房，改善家庭一步到位", noteCount: 6, rate: 100 },
+    { count: 7, label: "纯洋房小区，楼间距更舒适", noteCount: 2, rate: 100 },
+  ],
+  modeEffect: [
+    { collects: 2, comments: 4, label: "对比式", likes: 9, shares: 1 },
+    { collects: 12, comments: 20, label: "种草式", likes: 83, shares: 27 },
+    { collects: 1, comments: 2, label: "盘点式", likes: 5, shares: 0 },
+  ],
+  personaEffect: [
+    { interactionRate: 74, label: "置业顾问", noteCount: 95 },
+    { interactionRate: 28, label: "模拟客户", noteCount: 9 },
+  ],
+  sentimentEffect: [
+    { count: 105, label: "中性" },
   ],
 };
 
@@ -359,7 +457,7 @@ export const mockTagConfigData: ConsoleConfigResponse = {
 };
 
 export const mockSellingPointConfigData: ConsoleConfigResponse = {
-  allowPrimaryCreate: false,
+  allowPrimaryCreate: true,
   modeOptions: ["对比式", "晒单式", "盘点式", "求助式", "种草式"],
   stats: [
     { label: "一级分类", value: 10 },
