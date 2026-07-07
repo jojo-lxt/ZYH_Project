@@ -21,32 +21,51 @@ export function AppProviders({ children }: AppProvidersProps) {
         theme={{
           components: {
             Button: {
-              borderRadius: 6,
+              borderRadius: 8,
               controlHeight: 40,
-              fontWeight: 600,
+              fontWeight: 700,
               primaryShadow: "none",
             },
+            DatePicker: {
+              borderRadius: 8,
+              controlHeight: 42,
+            },
             Input: {
-              borderRadius: 6,
+              borderRadius: 8,
               controlHeight: 40,
             },
+            Modal: {
+              borderRadiusLG: 10,
+            },
             Select: {
-              borderRadius: 6,
+              borderRadius: 8,
               controlHeight: 42,
+            },
+            Table: {
+              headerBg: "#eef7ff",
+              headerColor: "#16324f",
+              rowHoverBg: "#f7fbff",
+            },
+            Tabs: {
+              inkBarColor: "#00b8ff",
+              itemActiveColor: "#006bff",
+              itemHoverColor: "#00a4e8",
+              itemSelectedColor: "#006bff",
             },
             Upload: {
               borderRadiusLG: 8,
-              colorBorder: "#d6d3d1",
+              colorBorder: "#b8d7ee",
             },
           },
           token: {
-            borderRadius: 6,
+            borderRadius: 8,
             colorBgContainer: "#ffffff",
-            colorBorder: "#d6d3d1",
-            colorInfo: "#0f766e",
-            colorPrimary: "#0f766e",
-            colorText: "#1c1917",
-            colorTextSecondary: "#57534e",
+            colorBorder: "#bfd8ea",
+            colorInfo: "#00b8ff",
+            colorPrimary: "#006bff",
+            colorSuccess: "#18c964",
+            colorText: "#102033",
+            colorTextSecondary: "#5f6f86",
             fontFamily: 'Arial, "PingFang SC", "Microsoft YaHei", Helvetica, sans-serif',
           },
         }}

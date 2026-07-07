@@ -43,7 +43,9 @@ const emptyStrategyData: ConsoleStrategyResponse = {
   sentimentEffect: [],
 };
 
-const chartColors = ["#2f80ed", "#27ae60", "#f2994a", "#bb6bd9", "#56ccf2", "#f2c94c"];
+const chartAxisColor = "#71839d";
+const chartLineColor = "#dbeaf5";
+const chartColors = ["#006bff", "#00b8ff", "#18c964", "#ff6b4a", "#7c3aed", "#f5c542"];
 
 function getRangeQuery(dateRange: DateRange) {
   if (!dateRange) {
@@ -162,25 +164,25 @@ function getMainTrendOption(trend: OverviewTrendPoint[]): EChartsOption {
   const dates = trend.map((item) => item.date);
 
   return {
-    color: ["#41aa69", "#3267ff", "#f2994a"],
+    color: ["#00b8ff", "#006bff", "#ff6b4a"],
     grid: { bottom: 42, left: 56, right: 60, top: 56 },
     legend: { left: 8, top: 0 },
     tooltip: { trigger: "axis" },
     xAxis: {
-      axisLine: { lineStyle: { color: "#d8d3ca" } },
+      axisLine: { lineStyle: { color: chartLineColor } },
       axisTick: { show: false },
       data: dates,
       type: "category",
     },
     yAxis: [
       {
-        axisLabel: { color: "#8a8178" },
+        axisLabel: { color: chartAxisColor },
         name: "曝光数量",
-        splitLine: { lineStyle: { color: "#eee8df", type: "dashed" } },
+        splitLine: { lineStyle: { color: chartLineColor, type: "dashed" } },
         type: "value",
       },
       {
-        axisLabel: { color: "#8a8178" },
+        axisLabel: { color: chartAxisColor },
         name: "笔记/互动",
         splitLine: { show: false },
         type: "value",
@@ -224,14 +226,14 @@ function getMetricTrendOption(
     legend: { left: 0, top: 0 },
     tooltip: { trigger: "axis" },
     xAxis: {
-      axisLine: { lineStyle: { color: "#d8d3ca" } },
+      axisLine: { lineStyle: { color: chartLineColor } },
       axisTick: { show: false },
       data: trend.map((item) => item.date),
       type: "category",
     },
     yAxis: {
-      axisLabel: { color: "#8a8178" },
-      splitLine: { lineStyle: { color: "#eee8df", type: "dashed" } },
+      axisLabel: { color: chartAxisColor },
+      splitLine: { lineStyle: { color: chartLineColor, type: "dashed" } },
       type: "value",
     },
     series: series.map((item) => ({
@@ -246,7 +248,7 @@ function getMetricTrendOption(
 
 function getPersonaOption(data: ConsoleStrategyResponse["personaEffect"]): EChartsOption {
   return {
-    color: ["#2f80ed", "#4ac26b"],
+    color: ["#006bff", "#18c964"],
     grid: { bottom: 40, left: 48, right: 54, top: 44 },
     legend: { left: 0, top: 0 },
     tooltip: { trigger: "axis" },
@@ -258,7 +260,7 @@ function getPersonaOption(data: ConsoleStrategyResponse["personaEffect"]): EChar
     yAxis: [
       {
         name: "笔记数",
-        splitLine: { lineStyle: { color: "#eee8df", type: "dashed" } },
+        splitLine: { lineStyle: { color: chartLineColor, type: "dashed" } },
         type: "value",
       },
       {
@@ -305,7 +307,7 @@ function getModeOption(data: ConsoleStrategyResponse["modeEffect"]): EChartsOpti
       type: "category",
     },
     yAxis: {
-      splitLine: { lineStyle: { color: "#eee8df", type: "dashed" } },
+      splitLine: { lineStyle: { color: chartLineColor, type: "dashed" } },
       type: "value",
     },
     series: metrics.map((metric) => ({
@@ -344,7 +346,7 @@ function getKeywordHeatOption(data: ConsoleStrategyResponse["keywordHeat"]): ECh
     legend: { left: 0, top: 0 },
     tooltip: { trigger: "axis" },
     xAxis: {
-      splitLine: { lineStyle: { color: "#eee8df", type: "dashed" } },
+      splitLine: { lineStyle: { color: chartLineColor, type: "dashed" } },
       type: "value",
     },
     yAxis: {
@@ -377,7 +379,7 @@ function getHeatmapOption(heatmap: ConsoleStrategyResponse["heatmap"]): EChartsO
       },
     },
     visualMap: {
-      inRange: { color: ["#eaf3ff", "#6bb6ff", "#1f83ff"] },
+      inRange: { color: ["#ecf9ff", "#7bdcff", "#006bff"] },
       max: 100,
       min: 0,
       show: false,
@@ -444,15 +446,15 @@ function OverviewPage({
   const [ownerType, setOwnerType] = useState<ConsoleOwnerType>("personal");
   const mainTrendOption = useMemo(() => getMainTrendOption(data.trend), [data.trend]);
   const noteTrendOption = useMemo(
-    () => getMetricTrendOption(data.trend, [{ color: "#3267ff", dataKey: "noteCount", name: "笔记数" }]),
+    () => getMetricTrendOption(data.trend, [{ color: "#006bff", dataKey: "noteCount", name: "笔记数" }]),
     [data.trend],
   );
   const interactionTrendOption = useMemo(
     () => getMetricTrendOption(data.trend, [
-      { color: "#3267ff", dataKey: "likes", name: "点赞" },
-      { color: "#27ae60", dataKey: "collects", name: "收藏" },
-      { color: "#f2994a", dataKey: "shares", name: "分享" },
-      { color: "#bb6bd9", dataKey: "comments", name: "评论" },
+      { color: "#006bff", dataKey: "likes", name: "点赞" },
+      { color: "#00b8ff", dataKey: "collects", name: "收藏" },
+      { color: "#ff6b4a", dataKey: "shares", name: "分享" },
+      { color: "#7c3aed", dataKey: "comments", name: "评论" },
     ]),
     [data.trend],
   );

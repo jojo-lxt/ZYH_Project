@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -16,6 +15,7 @@ import {
   SettingOutlined,
   TagsOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
   UploadOutlined,
   UserOutlined,
   VideoCameraOutlined,
@@ -177,7 +177,7 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
       <Sider className="console-sidebar" theme="light" width={244}>
         <div className="console-brand">
           <div className="brand-mark">
-            <Image alt="占位 Logo" height={32} src="/globe.svg" width={32} />
+            <ThunderboltOutlined />
           </div>
           <strong>内容中台</strong>
         </div>

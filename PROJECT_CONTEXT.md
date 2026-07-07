@@ -248,6 +248,7 @@ draft_images
 - 图片标签配置增删改
 - 图片卖点一级分类和二级卖点增删改
 - 概览和策略看板基础展示，图表使用 ECharts
+- 控制台视觉已刷新为偏科技感的蓝/青/绿/橙/紫亮色体系
 
 ## 未完整实现的功能
 
@@ -367,14 +368,28 @@ https://miniapp.xiaohongshu.com/
 src/app/globals.css
 ```
 
+Ant Design 主题入口：
+
+```text
+src/app/providers.tsx
+```
+
+控制台外壳：
+
+```text
+src/features/console/components/ConsoleShell.tsx
+```
+
 约定：
 
 - 后台系统风格，保持信息密度
-- 主色为深青绿色 `#0f766e`
+- 主视觉为科技感亮色体系：主色 `#006bff`，辅助色 `#00b8ff`、`#18c964`、`#ff6b4a`、`#7c3aed`
+- 侧栏使用深色科技风，内容区使用浅色网格背景和轻量玻璃感卡片
 - 卡片圆角约 8px
 - 优先使用 AntD 和 `@ant-design/icons`
+- 控件主题优先改 `src/app/providers.tsx`，跨页面视觉优先改 `src/app/globals.css`
 - 不做营销站式大 Hero
-- 图表统一使用 ECharts，不用 CSS/SVG 伪图表
+- 图表统一使用 ECharts，不用 CSS/SVG 伪图表；ECharts 配色当前集中在 `src/features/console/overview/OverviewDashboard.tsx`
 
 参考截图目录：
 
