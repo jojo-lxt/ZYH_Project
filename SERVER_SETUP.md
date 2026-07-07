@@ -153,8 +153,14 @@ node -v 输出 v22.x.x
 
 ```bash
 corepack enable
-corepack prepare pnpm@latest --activate
+corepack prepare pnpm@11.10.0 --activate
 pnpm -v
+```
+
+期望：
+
+```text
+pnpm -v 输出 11.10.0
 ```
 
 如果访问 npm 官方源很慢，可以切到国内源：
@@ -424,6 +430,27 @@ TENCENT_COS_REGION=""
 
 ```bash
 cd /home/ubuntu/content-publisher-console
+pnpm build
+```
+
+如果构建前自动检查依赖时报：
+
+```text
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: sharp@0.34.5, unrs-resolver@1.12.2
+```
+
+先确认服务器上的代码已经包含项目根目录的 `pnpm-workspace.yaml`，其中应使用 pnpm 11 的 `allowBuilds` 写法：
+
+```yaml
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+```
+
+如果服务器文件还是旧的 `ignoredBuiltDependencies`，执行 `git pull` 更新代码后重新运行：
+
+```bash
+pnpm install --frozen-lockfile
 pnpm build
 ```
 

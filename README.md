@@ -4,6 +4,13 @@
 
 ## 开发命令
 
+项目声明使用 `pnpm@11.10.0`。建议通过 corepack 启用同版本：
+
+```bash
+corepack enable
+corepack prepare pnpm@11.10.0 --activate
+```
+
 ```bash
 pnpm dev
 pnpm lint

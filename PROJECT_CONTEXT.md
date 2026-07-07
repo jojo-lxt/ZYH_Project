@@ -415,6 +415,24 @@ Operation not permitted
 
 这是 Turbopack 在沙箱中处理 CSS 时创建进程/绑定端口被拒绝，不代表代码错误。非沙箱环境执行 `pnpm build` 可通过。
 
+### pnpm 11 依赖脚本审批
+
+项目使用 `packageManager: pnpm@11.10.0`。pnpm 11 使用 `allowBuilds` 审批依赖安装脚本，项目根目录的 `pnpm-workspace.yaml` 当前显式拒绝下面两个依赖的安装脚本：
+
+```yaml
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
+```
+
+如果服务器执行 `pnpm build` 前自动检查依赖并报：
+
+```text
+[ERR_PNPM_IGNORED_BUILDS] Ignored build scripts: sharp@0.34.5, unrs-resolver@1.12.2
+```
+
+通常是服务器代码还停留在旧的 `ignoredBuiltDependencies` 写法。更新代码后重新执行 `pnpm install --frozen-lockfile` 和 `pnpm build`。
+
 ### 缺少 `DATABASE_URL`
 
 如果没有配置 `DATABASE_URL`，访问控制台页面会在鉴权或数据读取时抛出：
