@@ -67,6 +67,22 @@ const nextConfig = {
 
 不要随意删除 `allowedDevOrigins`，否则在服务器 IP 访问 dev server 时可能被 Next 拦截。
 
+## 服务器登录和部署用户
+
+当前腾讯云服务器使用 Ubuntu 镜像默认用户登录：
+
+```bash
+ssh ubuntu@<服务器公网IP>
+```
+
+部署文档里的项目目录按 `ubuntu` 用户维护：
+
+```text
+/home/ubuntu/content-publisher-console
+```
+
+不要把 SSH 用户名直接改成 `zyh`。如果未来要改用 `zyh` 用户，需要先在 Linux 系统里创建该用户、配置 sudo 权限、SSH key、PM2 startup 和项目目录权限。
+
 ## 主要路由
 
 控制台页面位于 `src/app/(console)/`，URL 不包含 `(console)`。

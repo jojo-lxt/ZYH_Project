@@ -113,5 +113,6 @@ GET  /api/drafts/[id]/images/[filename]
 ## 注意事项
 
 - 修改 Next.js 路由、Route Handler 或配置前，先读 `node_modules/next/dist/docs/` 中的对应文档。项目根目录的 `AGENTS.md` 明确要求不要按旧版 Next.js 经验直接改。
+- 腾讯云 Ubuntu 镜像默认使用 `ubuntu` 用户登录，服务器部署路径按 `/home/ubuntu/content-publisher-console` 维护；不要直接把 SSH 用户名改成未创建的其他用户。
 - `src/shared/mock/consoleData.ts` 仍保留作为早期 mock/兜底数据，不代表当前主要数据来源。
 - 小程序发布能力依赖平台官方开放能力和审核权限，普通 H5 无法绕过平台限制直接写入真实小红书草稿页。

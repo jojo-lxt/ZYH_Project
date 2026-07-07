@@ -34,7 +34,7 @@ PostgreSQL 本机数据库
 | `<你的域名>` | 绑定服务器的主域名 | `example.com` |
 | `<你的www域名>` | 带 www 的域名，不需要可删掉 | `www.example.com` |
 | `<数据库密码>` | PostgreSQL 用户密码 | 使用强密码，不要用示例 |
-| `<服务器用户名>` | 当前登录服务器的 Linux 用户名 | 本项目计划使用 `zyh` |
+| `<服务器用户名>` | 当前登录服务器的 Linux 用户名 | 腾讯云 Ubuntu 镜像默认使用 `ubuntu` |
 | `<管理员手机号>` | 后台第一个管理员登录手机号 | 11 位手机号 |
 | `<管理员登录密码>` | 后台第一个管理员登录密码 | 至少 8 位，使用强密码 |
 | `<管理员姓名>` | 后台第一个管理员显示名 | `管理员` |
@@ -59,14 +59,12 @@ curl ifconfig.me
 在你自己的电脑上执行，替换 `<服务器公网IP>`：
 
 ```bash
-ssh root@<服务器公网IP>
+ssh ubuntu@<服务器公网IP>
 ```
 
-如果你已经创建并启用了 `zyh` 用户，则使用：
+腾讯云 Ubuntu 镜像默认登录用户通常是 `ubuntu`。不要在登录时把用户名改成 `zyh`，除非你已经在系统里创建并配置了 `zyh` 用户。
 
-```bash
-ssh zyh@<服务器公网IP>
-```
+如果你通过控制台临时启用了 root 登录，也可以用 `root` 做系统维护；但项目安装、构建、PM2 等命令仍建议回到 `ubuntu` 用户执行。
 
 登录后先确认系统版本：
 
@@ -98,21 +96,19 @@ timedatectl 输出里 Time zone 应该是 Asia/Shanghai
 
 ## 3. 创建项目目录
 
-项目统一放在 `/var/zyh/content-publisher-console`。
+项目统一放在 `/home/ubuntu/content-publisher-console`。
 
 ```bash
-sudo mkdir -p /var/zyh
-sudo chown -R zyh:zyh /var/zyh
-cd /var/zyh
+cd /home/ubuntu
 ```
 
 验证权限：
 
 ```bash
-ls -ld /var/zyh
+ls -ld /home/ubuntu
 ```
 
-注意：后续 `pnpm install`、`pnpm build`、`pm2` 等项目命令尽量都使用 `zyh` 用户执行，不要用 `root` 执行，避免 `node_modules`、`.next` 目录权限混乱。
+注意：后续 `pnpm install`、`pnpm build`、`pm2` 等项目命令尽量都使用 `ubuntu` 用户执行，不要用 `root` 执行，避免 `node_modules`、`.next` 目录权限混乱。
 
 ## 4. 安装 Node.js 22
 
@@ -247,7 +243,7 @@ pm2 startup systemd
 执行后，PM2 会输出一条类似下面的命令：
 
 ```bash
-sudo env PATH=... pm2 startup systemd -u zyh --hp /home/zyh
+sudo env PATH=... pm2 startup systemd -u ubuntu --hp /home/ubuntu
 ```
 
 复制 PM2 实际输出的那一整行，再执行一次。
@@ -292,14 +288,14 @@ sudo ufw status
 进入项目目录：
 
 ```bash
-cd /var/zyh
+cd /home/ubuntu
 ```
 
 拉取代码。必须替换 `<你的Git仓库地址>`：
 
 ```bash
 git clone <你的Git仓库地址> content-publisher-console
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 ```
 
 如果你还没有 Git 仓库，也可以先用 `scp` 上传项目压缩包，但长期建议用 Git 部署。
@@ -329,7 +325,7 @@ database/schema.sql
 在项目根目录执行。必须替换 `<数据库密码>`：
 
 ```bash
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/schema.sql
 ```
 
@@ -369,7 +365,7 @@ draft_images
 创建第一个后台管理员账号。必须替换 `<数据库密码>`、`<管理员手机号>`、`<管理员登录密码>`、`<管理员姓名>`、`<管理员默认项目>`：
 
 ```bash
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 ADMIN_PASSWORD_HASH="$(node scripts/hash-password.mjs '<管理员登录密码>')"
 PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher \
   -v admin_phone="<管理员手机号>" \
@@ -393,7 +389,7 @@ PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publi
 在项目根目录执行：
 
 ```bash
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 vim .env.production
 ```
 
@@ -427,7 +423,7 @@ TENCENT_COS_REGION=""
 ## 12. 构建项目
 
 ```bash
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 pnpm build
 ```
 
@@ -444,7 +440,7 @@ ls -ld .next
 ## 13. 使用 PM2 启动项目
 
 ```bash
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 pm2 start pnpm --name content-publisher-console -- start
 pm2 save
 pm2 status
@@ -603,9 +599,9 @@ https://<你的域名>
 创建备份目录：
 
 ```bash
-sudo mkdir -p /var/zyh/backups/postgresql
-sudo chown -R zyh:zyh /var/zyh/backups
-chmod 700 /var/zyh/backups/postgresql
+sudo mkdir -p /home/ubuntu/backups/postgresql
+sudo chown -R ubuntu:ubuntu /home/ubuntu/backups
+chmod 700 /home/ubuntu/backups/postgresql
 ```
 
 创建备份脚本：
@@ -620,7 +616,7 @@ vim ~/backup-postgres.sh
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKUP_DIR="/var/zyh/backups/postgresql"
+BACKUP_DIR="/home/ubuntu/backups/postgresql"
 DB_NAME="content_publisher"
 DB_USER="content_app"
 DB_PASSWORD="<数据库密码>"
@@ -642,7 +638,7 @@ chmod +x ~/backup-postgres.sh
 
 ```bash
 ~/backup-postgres.sh
-ls -lh /var/zyh/backups/postgresql
+ls -lh /home/ubuntu/backups/postgresql
 ```
 
 恢复备份的基本命令如下。必须替换 `<备份文件>` 和 `<数据库密码>`：
@@ -660,7 +656,7 @@ crontab -e
 加入下面一行：
 
 ```cron
-0 3 * * * /home/zyh/backup-postgres.sh >> /home/zyh/backup-postgres.log 2>&1
+0 3 * * * /home/ubuntu/backup-postgres.sh >> /home/ubuntu/backup-postgres.log 2>&1
 ```
 
 查看定时任务：
@@ -669,14 +665,14 @@ crontab -e
 crontab -l
 ```
 
-建议后续把 `/var/zyh/backups/postgresql` 同步到 COS，避免服务器磁盘损坏时备份一起丢失。
+建议后续把 `/home/ubuntu/backups/postgresql` 同步到 COS，避免服务器磁盘损坏时备份一起丢失。
 
 ## 18. 项目更新流程
 
 以后每次更新代码：
 
 ```bash
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 git pull
 pnpm install --frozen-lockfile
 pnpm build
@@ -687,7 +683,7 @@ pm2 save
 如果只是改了环境变量：
 
 ```bash
-cd /var/zyh/content-publisher-console
+cd /home/ubuntu/content-publisher-console
 pm2 restart content-publisher-console --update-env
 pm2 save
 ```
@@ -754,8 +750,8 @@ sudo ss -tulpn
 
 ```bash
 df -h
-du -sh /var/zyh/content-publisher-console
-du -sh /var/zyh/backups/postgresql
+du -sh /home/ubuntu/content-publisher-console
+du -sh /home/ubuntu/backups/postgresql
 ```
 
 查看内存：
