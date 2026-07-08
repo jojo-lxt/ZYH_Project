@@ -289,6 +289,49 @@ sudo ufw status
 
 原因：外部只应该访问 Nginx 的 80/443，Next.js 3000 和 PostgreSQL 5432 都只在服务器内部访问。
 
+如果只是临时绕过 Nginx 测试 Next.js 的 3000 端口，可以短暂放行：
+
+```bash
+sudo ufw allow 3000/tcp
+sudo ufw status numbered
+```
+
+然后访问：
+
+```text
+http://<服务器公网IP>:3000
+```
+
+测试完成后必须删除这条规则。先查看编号：
+
+```bash
+sudo ufw status numbered
+```
+
+假设 `3000/tcp` 对应编号是 `3`，删除：
+
+```bash
+sudo ufw delete 3
+sudo ufw status
+```
+
+更稳妥的临时测试方式是只允许你自己的公网 IP 访问 3000。先在本地电脑查公网 IP：
+
+```bash
+curl ifconfig.me
+```
+
+再在服务器上执行：
+
+```bash
+sudo ufw allow from <你的公网IP> to any port 3000 proto tcp
+sudo ufw status numbered
+```
+
+测试完成后同样用 `sudo ufw delete <编号>` 删除规则。
+
+注意：腾讯云控制台安全组如果没有放行 3000，即使 UFW 放行也无法从公网访问。临时测试时可以在安全组里短暂放行 `3000/tcp`，测试完成后也要删除。
+
 ## 9. 拉取项目代码
 
 进入项目目录：
@@ -404,6 +447,7 @@ vim .env.production
 ```env
 NODE_ENV=production
 DATABASE_URL="postgresql://content_app:<数据库密码>@localhost:5432/content_publisher"
+AUTH_COOKIE_SECURE="true"
 
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL=""
 NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL=""
@@ -413,6 +457,7 @@ NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL=""
 
 ```text
 DATABASE_URL 是后端服务连接 PostgreSQL 的地址。
+AUTH_COOKIE_SECURE 控制登录 session cookie 是否只允许 HTTPS。正式环境应保持 true；如果临时用 http://<服务器公网IP>:3000 测试登录，可短暂设为 false，测试完成后再改回 true 并重启 PM2。
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL 后续填小红书小程序跳转链接模板。
 NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL 后续填微信小程序跳转链接模板。
 ```

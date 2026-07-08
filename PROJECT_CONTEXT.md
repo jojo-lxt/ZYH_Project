@@ -443,6 +443,23 @@ DATABASE_URL is not configured
 
 本地和生产环境都需要配置 PostgreSQL 连接串。
 
+### 登录成功后又回到登录页
+
+登录接口成功后会通过 `zyh_console_session` HttpOnly cookie 保存会话，控制台布局再读取该 cookie 鉴权。如果浏览器没有保存或发送这个 cookie，页面会被重定向回 `/login`。
+
+常见原因：
+
+- 生产环境默认给 cookie 加 `Secure`，但正在用 `http://<服务器公网IP>:3000` 直接测试，浏览器不会保存/发送 Secure cookie
+- 正式域名 HTTPS、HTTP、IP、端口混用，导致 cookie 写在一个 host 下，访问另一个 host 时没有带上
+
+项目支持 `AUTH_COOKIE_SECURE` 环境变量：
+
+```env
+AUTH_COOKIE_SECURE="true"
+```
+
+正式 HTTPS 环境保持 `true`；临时 HTTP 直连 3000 测试可短暂设为 `false`，改完后需要 `pm2 restart content-publisher-console --update-env`。测试完成后应改回 `true`，并优先通过 Nginx HTTPS 访问。
+
 ## 给后续 AI 的建议
 
 开始新对话后建议先读：

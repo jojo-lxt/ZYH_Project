@@ -39,13 +39,27 @@ function toAuthUser(row: SessionUserRow): AuthUser {
   };
 }
 
+export function shouldUseSecureAuthCookie() {
+  const configured = process.env.AUTH_COOKIE_SECURE?.trim().toLowerCase();
+
+  if (configured === "true") {
+    return true;
+  }
+
+  if (configured === "false") {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 export function getAuthCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     maxAge,
     path: "/",
     sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
+    secure: shouldUseSecureAuthCookie(),
   };
 }
 
