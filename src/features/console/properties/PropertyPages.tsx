@@ -53,7 +53,6 @@ const emptyUserDraft: UserDraft = {
   name: "",
   password: "",
   phone: "",
-  property: "",
   role: "游客",
   status: "active",
 };
@@ -380,46 +379,34 @@ function PropertyDetailPage() {
 function UsersPage() {
   const { message } = App.useApp();
   const { data: usersData, isFetching, refetch } = useGetUsersQuery();
-  const { data: propertiesData } = useGetPropertiesQuery();
   const [createUser, { isLoading: isCreating }] = useCreateUserMutation();
   const [updateUser, { isLoading: isUpdating }] = useUpdateUserMutation();
   const [deleteUserMutation] = useDeleteUserMutation();
   const users = usersData?.users ?? emptyUsers;
-  const propertyOptions = useMemo(
-    () =>
-      (propertiesData?.properties ?? []).map((property) => ({
-        label: property.name,
-        value: property.name,
-      })),
-    [propertiesData],
-  );
   const [currentPage, setCurrentPage] = useState(1);
   const [draft, setDraft] = useState<UserDraft>(emptyUserDraft);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [nameQuery, setNameQuery] = useState("");
   const [phoneQuery, setPhoneQuery] = useState("");
-  const [propertyQuery, setPropertyQuery] = useState<string | undefined>();
   const [sortDesc, setSortDesc] = useState(true);
 
   const filteredUsers = useMemo(() => {
     const list = users.filter((user) => {
       const matchPhone = !phoneQuery.trim() || user.phone.includes(phoneQuery.trim());
       const matchName = !nameQuery.trim() || user.name.includes(nameQuery.trim());
-      const matchProperty = !propertyQuery || user.property === propertyQuery;
 
-      return matchPhone && matchName && matchProperty;
+      return matchPhone && matchName;
     });
 
     return sortDesc ? list : [...list].reverse();
-  }, [nameQuery, phoneQuery, propertyQuery, sortDesc, users]);
+  }, [nameQuery, phoneQuery, sortDesc, users]);
   const pageUsers = filteredUsers.slice((currentPage - 1) * 10, currentPage * 10);
 
   function openCreateUser() {
     setEditingKey(null);
     setDraft({
       ...emptyUserDraft,
-      property: propertyOptions[0]?.value ?? "",
     });
     setIsModalOpen(true);
   }
@@ -430,7 +417,6 @@ function UsersPage() {
       name: user.name,
       password: "",
       phone: user.phone,
-      property: user.property,
       role: user.role,
       status: user.status ?? "active",
     });
@@ -465,7 +451,6 @@ function UsersPage() {
           name: draft.name,
           password: draft.password || undefined,
           phone: draft.phone,
-          property: draft.property,
           role: draft.role,
           status: draft.status,
         }).unwrap();
@@ -474,7 +459,6 @@ function UsersPage() {
           name: draft.name,
           password: draft.password,
           phone: draft.phone,
-          property: draft.property,
           role: draft.role,
         }).unwrap();
       }
@@ -533,7 +517,6 @@ function UsersPage() {
         </Tag>
       ),
     },
-    { dataIndex: "property", title: "有权限的项目" },
     { dataIndex: "createdAt", title: "创建时间" },
     {
       title: "操作",
@@ -570,19 +553,11 @@ function UsersPage() {
           placeholder="用户名"
           value={nameQuery}
         />
-        <Select
-          allowClear
-          onChange={(value) => setPropertyQuery(value)}
-          options={propertyOptions}
-          placeholder="有权限的项目"
-          value={propertyQuery}
-        />
         <Space>
           <Button
             onClick={() => {
               setPhoneQuery("");
               setNameQuery("");
-              setPropertyQuery(undefined);
               setCurrentPage(1);
             }}
           >
@@ -678,15 +653,6 @@ function UsersPage() {
                 { label: "游客", value: "游客" },
               ]}
               value={draft.role}
-            />
-          </label>
-          <label>
-            <span>有权限的项目</span>
-            <Select
-              onChange={(value) => setDraft((current) => ({ ...current, property: value }))}
-              options={propertyOptions}
-              placeholder="请选择项目"
-              value={draft.property || undefined}
             />
           </label>
           <label>

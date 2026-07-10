@@ -1,5 +1,6 @@
 import "server-only";
 import { getCurrentUser } from "@/server/auth/session";
+import { userCanAccessProject } from "@/server/console/consoleRepository";
 
 export async function requireConsoleUser() {
   const user = await getCurrentUser();
@@ -38,6 +39,19 @@ export async function requireConsoleProject(request: Request): Promise<ConsolePr
     return {
       propertyId: null,
       response: Response.json({ error: "未选择项目" }, { status: 400 }),
+    };
+  }
+
+  // 校验该用户能否访问这个项目(管理员放行,否则须为归属人),防止用请求头越权访问别人的项目。
+  const canAccess = await userCanAccessProject(propertyId, {
+    isAdmin: auth.user.role === "管理员",
+    userId: auth.user.id,
+  });
+
+  if (!canAccess) {
+    return {
+      propertyId: null,
+      response: Response.json({ error: "无权访问该项目" }, { status: 403 }),
     };
   }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AppstoreOutlined,
   BarChartOutlined,
@@ -77,10 +77,11 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
   const dispatch = useAppDispatch();
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isMaterialsRoute = pathname.startsWith("/materials");
   const [openKeys, setOpenKeys] = useState(["module", "config"]);
   const { data: propertiesData } = useGetPropertiesQuery();
-  // 项目切换器按「项目 id」工作(而非项目名),后端据此隔离数据。
+  // 项目切换器按「项目 id」工作(而非项目名),后端据此隔离数据。getProperties 只返回当前用户的项目。
   const projectOptions = useMemo(
     () =>
       (propertiesData?.properties ?? []).map((property) => ({
@@ -89,22 +90,34 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
       })),
     [propertiesData?.properties],
   );
-  // 默认项目:用户绑定项目(按名字匹配)对应的 id,匹配不上则取第一个项目。
-  const defaultProjectId = useMemo(() => {
-    const userProperty = currentUser.property.trim();
-    const bound = (propertiesData?.properties ?? []).find((property) => property.name === userProperty);
+  // 当前项目 id 放在 URL 查询参数 ?project= 里,刷新后仍保持在同一个项目。
+  // 优先级:URL 里的有效项目 > 用户的第一个项目。
+  const urlProject = searchParams.get("project") ?? "";
+  const urlProjectValid = projectOptions.some((item) => item.value === urlProject);
+  const selectedProject = urlProjectValid ? urlProject : propertiesData?.properties[0]?.key ?? "";
 
-    return bound?.key ?? propertiesData?.properties[0]?.key ?? "";
-  }, [currentUser.property, propertiesData?.properties]);
-  const selectedProject = currentProject && projectOptions.some((item) => item.value === currentProject)
-    ? currentProject
-    : defaultProjectId;
-
+  // 选中的项目同步进 Redux(供请求头 X-Project-Id 和 RTK 查询参数用)。
   useEffect(() => {
     if (selectedProject && selectedProject !== currentProject) {
       dispatch(setCurrentProject(selectedProject));
     }
   }, [currentProject, dispatch, selectedProject]);
+
+  // URL 里没有有效项目时,把默认项目写进 URL(刷新后仍保持)。
+  useEffect(() => {
+    if (selectedProject && selectedProject !== urlProject) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("project", selectedProject);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
+  }, [pathname, router, searchParams, selectedProject, urlProject]);
+
+  // 切换项目 = 改 URL 的 ?project=(effect 会把它同步进 Redux 并触发数据重拉)。
+  function switchProject(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("project", value);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -199,7 +212,7 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
         <Header className="console-topbar">
           <Select
             className="project-picker"
-            onChange={(value) => dispatch(setCurrentProject(value))}
+            onChange={(value) => switchProject(value)}
             options={projectOptions}
             placeholder="请选择项目"
             value={selectedProject || undefined}

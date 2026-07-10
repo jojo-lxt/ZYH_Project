@@ -102,7 +102,6 @@ type UserDbRow = {
   id: string;
   name: string;
   phone: string;
-  property: string;
   role: string;
   status: string;
 };
@@ -331,7 +330,6 @@ function mapUser(row: UserDbRow): UserRow {
     key: row.id,
     name: row.name,
     phone: row.phone,
-    property: row.property,
     role: row.role,
     status: row.status,
   };
@@ -802,6 +800,7 @@ export async function createMaterialUpload(formData: FormData, propertyId: strin
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File);
+  const titles = formData.getAll("titles").map((value) => String(value));
   const category = getTextFormValue(formData, "category") || "内页图";
   const stage = getTextFormValue(formData, "stage") || "待配置";
   const platforms = getUploadPlatforms(formData);
@@ -811,7 +810,8 @@ export async function createMaterialUpload(formData: FormData, propertyId: strin
   for (const [index, file] of files.entries()) {
     const bytes = Buffer.from(await file.arrayBuffer());
     const mimeType = file.type || "application/octet-stream";
-    const title = file.name || `upload-${Date.now()}-${index}`;
+    // 优先用用户填的标题;留空则回退文件名。
+    const title = (titles[index] ?? "").trim() || file.name || `upload-${Date.now()}-${index}`;
     const result = await withTransaction(async (client) => {
       const materialResult = await client.query<{ id: number }>(
         `
@@ -861,16 +861,18 @@ export async function createMaterialUpload(formData: FormData, propertyId: strin
   };
 }
 
-// 图片走 <img src> 加载,浏览器无法带上 X-Project-Id 头,所以图片接口只做登录校验、不按项目过滤。
-// 现有模型下任何登录用户本就能切到任意项目、看到全部素材,不构成新的越权。
-export async function getMaterialFile(id: number) {
+// 图片走 <img src> 加载,浏览器带不上 X-Project-Id 头,但会带 session cookie ——
+// 所以按「用户归属」过滤(该素材所属项目须归当前用户,或管理员放行),而不是按当前选中项目。
+export async function getMaterialFile(id: number, scope: PropertyScope) {
   return queryOne<MaterialFileRow>(
     `
-      SELECT original_name, mime_type, size_bytes, bytes
-      FROM material_files
-      WHERE material_id = $1
+      SELECT f.original_name, f.mime_type, f.size_bytes, f.bytes
+      FROM material_files f
+      JOIN materials m ON m.id = f.material_id
+      JOIN properties p ON p.id = m.property_id
+      WHERE f.material_id = $1 AND (p.owner_id = $2 OR $3)
     `,
-    [id],
+    [id, scope.userId, scope.isAdmin],
   );
 }
 
@@ -1071,16 +1073,24 @@ export async function deleteConfigItem(id: string, propertyId: string) {
   return result.rowCount ?? 0;
 }
 
-export async function getProperties(): Promise<ConsolePropertiesResponse> {
+// 项目归属过滤:普通用户只看自己创建的项目;管理员(isAdmin)看全部。
+export type PropertyScope = { isAdmin: boolean; userId: string };
+
+export async function getProperties(scope: PropertyScope): Promise<ConsolePropertiesResponse> {
   const [properties, total] = await Promise.all([
     queryRows<PropertyDbRow>(
       `
         SELECT id, developer, name, type, stage, address, created_at
         FROM properties
+        WHERE owner_id = $1 OR $2
         ORDER BY created_at DESC, id
       `,
+      [scope.userId, scope.isAdmin],
     ),
-    queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM properties"),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM properties WHERE owner_id = $1 OR $2",
+      [scope.userId, scope.isAdmin],
+    ),
   ]);
 
   return {
@@ -1092,16 +1102,17 @@ export async function getProperties(): Promise<ConsolePropertiesResponse> {
 export async function createProperty(
   input: Omit<PropertyRow, "createdAt" | "key">,
   detailBaseUrl: string,
+  ownerId: string,
 ) {
   return withTransaction(async (client) => {
     const id = randomUUID();
     const result = await client.query<PropertyDbRow>(
       `
-        INSERT INTO properties (id, developer, name, type, stage, address, description)
-        VALUES ($1, $2, $3, $4, $5, $6, '-')
+        INSERT INTO properties (id, owner_id, developer, name, type, stage, address, description)
+        VALUES ($1, $7, $2, $3, $4, $5, $6, '-')
         RETURNING id, developer, name, type, stage, address, description, created_at
       `,
-      [id, input.developer, input.name, input.type, input.stage, input.address],
+      [id, input.developer, input.name, input.type, input.stage, input.address, ownerId],
     );
 
     const row = result.rows[0];
@@ -1122,7 +1133,11 @@ export async function createProperty(
   });
 }
 
-export async function updateProperty(id: string, input: Partial<Omit<PropertyRow, "createdAt" | "key">>) {
+export async function updateProperty(
+  id: string,
+  input: Partial<Omit<PropertyRow, "createdAt" | "key">>,
+  scope: PropertyScope,
+) {
   const row = await queryOne<PropertyDbRow>(
     `
       UPDATE properties
@@ -1132,28 +1147,57 @@ export async function updateProperty(id: string, input: Partial<Omit<PropertyRow
         type = COALESCE($4, type),
         stage = COALESCE($5, stage),
         address = COALESCE($6, address)
-      WHERE id = $1
+      WHERE id = $1 AND (owner_id = $7 OR $8)
       RETURNING id, developer, name, type, stage, address, description, created_at
     `,
-    [id, input.developer ?? null, input.name ?? null, input.type ?? null, input.stage ?? null, input.address ?? null],
+    [
+      id,
+      input.developer ?? null,
+      input.name ?? null,
+      input.type ?? null,
+      input.stage ?? null,
+      input.address ?? null,
+      scope.userId,
+      scope.isAdmin,
+    ],
   );
 
   return row ? mapProperty(row) : null;
 }
 
-export async function deleteProperty(id: string) {
-  const result = await query("DELETE FROM properties WHERE id = $1", [id]);
+export async function deleteProperty(id: string, scope: PropertyScope) {
+  const result = await query(
+    "DELETE FROM properties WHERE id = $1 AND (owner_id = $2 OR $3)",
+    [id, scope.userId, scope.isAdmin],
+  );
   return result.rowCount ?? 0;
 }
 
-export async function getPropertyDetail(id: string): Promise<ConsolePropertyDetailResponse | null> {
+// 供 requireConsoleProject 用:校验用户能否访问某项目(管理员放行,否则须为归属人)。
+export async function userCanAccessProject(projectId: string, scope: PropertyScope) {
+  if (scope.isAdmin) {
+    return true;
+  }
+
+  const row = await queryOne<{ ok: number }>(
+    "SELECT 1 AS ok FROM properties WHERE id = $1 AND owner_id = $2",
+    [projectId, scope.userId],
+  );
+
+  return row !== null;
+}
+
+export async function getPropertyDetail(
+  id: string,
+  scope: PropertyScope,
+): Promise<ConsolePropertyDetailResponse | null> {
   const property = await queryOne<PropertyDbRow>(
     `
       SELECT id, developer, name, type, stage, address, description, created_at
       FROM properties
-      WHERE id = $1
+      WHERE id = $1 AND (owner_id = $2 OR $3)
     `,
-    [id],
+    [id, scope.userId, scope.isAdmin],
   );
 
   if (!property) {
@@ -1191,7 +1235,7 @@ export async function getUsers(): Promise<ConsoleUsersResponse> {
   const [users, total] = await Promise.all([
     queryRows<UserDbRow>(
       `
-        SELECT id, name, phone, role, property, status, created_at
+        SELECT id, name, phone, role, status, created_at
         FROM console_users
         ORDER BY created_at DESC, id
       `,
@@ -1209,17 +1253,16 @@ export async function createUser(input: {
   name: string;
   password: string;
   phone: string;
-  property: string;
   role: string;
 }) {
   const passwordHash = await hashPassword(input.password);
   const row = await queryOne<UserDbRow>(
     `
-      INSERT INTO console_users (id, name, phone, role, property, password_hash, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'active')
-      RETURNING id, name, phone, role, property, status, created_at
+      INSERT INTO console_users (id, name, phone, role, password_hash, status)
+      VALUES ($1, $2, $3, $4, $5, 'active')
+      RETURNING id, name, phone, role, status, created_at
     `,
-    [randomUUID(), input.name, input.phone, input.role, input.property, passwordHash],
+    [randomUUID(), input.name, input.phone, input.role, passwordHash],
   );
 
   return row ? mapUser(row) : null;
@@ -1231,7 +1274,6 @@ export async function updateUser(
     name?: string;
     password?: string;
     phone?: string;
-    property?: string;
     role?: string;
     status?: string;
   },
@@ -1244,18 +1286,16 @@ export async function updateUser(
         name = COALESCE($2, name),
         phone = COALESCE($3, phone),
         role = COALESCE($4, role),
-        property = COALESCE($5, property),
-        status = COALESCE($6, status),
-        password_hash = COALESCE($7, password_hash)
+        status = COALESCE($5, status),
+        password_hash = COALESCE($6, password_hash)
       WHERE id = $1
-      RETURNING id, name, phone, role, property, status, created_at
+      RETURNING id, name, phone, role, status, created_at
     `,
     [
       id,
       input.name ?? null,
       input.phone ?? null,
       input.role ?? null,
-      input.property ?? null,
       input.status ?? null,
       passwordHash,
     ],

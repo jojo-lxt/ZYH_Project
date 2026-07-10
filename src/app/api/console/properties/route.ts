@@ -7,7 +7,7 @@ export async function GET() {
   const auth = await requireConsoleUser();
   if (auth.response) return auth.response;
 
-  return Response.json(await getConsoleProperties());
+  return Response.json(await getConsoleProperties(auth.user));
 }
 
 export async function POST(request: Request) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   try {
     const detailBaseUrl = resolveDetailBaseUrl(request);
     return Response.json({
-      property: await createConsoleProperty(await request.json(), detailBaseUrl),
+      property: await createConsoleProperty(await request.json(), detailBaseUrl, auth.user.id),
     });
   } catch (error) {
     return jsonError(error, "项目创建失败");

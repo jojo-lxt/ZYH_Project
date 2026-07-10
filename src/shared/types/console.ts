@@ -73,7 +73,6 @@ export type UserRow = {
   name: string;
   phone: string;
   role: string;
-  property: string;
   status?: string;
   createdAt: string;
 };

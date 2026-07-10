@@ -11,7 +11,7 @@ export async function GET(
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
-  const file = await getConsoleMaterialFile(Number(id));
+  const file = await getConsoleMaterialFile(Number(id), auth.user);
 
   if (!file) {
     return new Response("Not found", {

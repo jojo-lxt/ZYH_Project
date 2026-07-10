@@ -12,7 +12,6 @@ type UserRow = {
   name: string;
   password_hash: string | null;
   phone: string;
-  property: string;
   role: string;
   status: string;
 };
@@ -21,7 +20,6 @@ type SessionUserRow = {
   id: string;
   name: string;
   phone: string;
-  property: string;
   role: string;
 };
 
@@ -34,7 +32,6 @@ function toAuthUser(row: SessionUserRow): AuthUser {
     id: row.id,
     name: row.name,
     phone: row.phone,
-    property: row.property,
     role: row.role,
   };
 }
@@ -74,7 +71,7 @@ export async function loginWithPassword({
 }) {
   const user = await queryOne<UserRow>(
     `
-      SELECT id, name, phone, role, property, password_hash, status
+      SELECT id, name, phone, role, password_hash, status
       FROM console_users
       WHERE phone = $1
       LIMIT 1
@@ -120,7 +117,7 @@ export async function getCurrentUserFromToken(token: string | undefined) {
 
   const row = await queryOne<SessionUserRow>(
     `
-      SELECT u.id, u.name, u.phone, u.role, u.property
+      SELECT u.id, u.name, u.phone, u.role
       FROM auth_sessions s
       INNER JOIN console_users u ON u.id = s.user_id
       WHERE s.token_hash = $1

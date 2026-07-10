@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AppstoreOutlined, ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, CloudUploadOutlined, TagsOutlined } from "@ant-design/icons";
-import { App, Button, Checkbox, Progress, Radio, Select, Space, Steps, Tabs, Tag, Upload } from "antd";
+import { App, Button, Checkbox, Input, Progress, Radio, Select, Space, Steps, Tabs, Tag, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useGetMaterialUploadOptionsQuery, useUpdateMaterialTagsMutation } from "@/store/consoleApi";
 import { selectConsoleCurrentProject } from "@/store/consoleSlice";
@@ -175,6 +175,7 @@ export function MaterialUploadImagePage() {
   const [step, setStep] = useState(0);
   const [taggingMode, setTaggingMode] = useState<"choice" | "tagging">("choice");
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [fileNames, setFileNames] = useState<Record<string, string>>({});
   const [category, setCategory] = useState("内页图");
   const [stage, setStage] = useState("待配置");
   const [platforms, setPlatforms] = useState<string[]>(["小红书", "微信"]);
@@ -202,6 +203,8 @@ export function MaterialUploadImagePage() {
     selectedFiles.forEach((file) => {
       if (file.originFileObj) {
         formData.append("images", file.originFileObj);
+        // 与 images 按相同顺序追加标题(留空则后端回退用文件名)。
+        formData.append("titles", (fileNames[file.uid] ?? "").trim());
       }
     });
     formData.append("category", category);
@@ -306,15 +309,7 @@ export function MaterialUploadImagePage() {
               <CloudUploadOutlined />
               <h2>拖拽图片文件到这里，或点击上传</h2>
               <p>支持批量上传，最多 2500 张，单张不超过 50MB</p>
-              <p>支持格式：JPG、PNG</p>
-              <Space>
-                <Button onClick={() => message.info("请选择图片文件")} type="primary">
-                  选择单张图片
-                </Button>
-                <Button onClick={() => message.info("当前演示环境按批量图片选择处理")} type="primary">
-                  选择文件夹
-                </Button>
-              </Space>
+              <p>支持格式：JPG、PNG(单张或多张都可,点此区域选择)</p>
             </div>
           </Dragger>
 
@@ -329,6 +324,34 @@ export function MaterialUploadImagePage() {
                 <Button onClick={resetUpload}>清空队列</Button>
               </Space>
             </div>
+            {selectedFiles.length > 0 ? (
+              <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
+                {selectedFiles.map((file) => (
+                  <div key={file.uid} style={{ alignItems: "center", display: "flex", gap: 12 }}>
+                    <span
+                      style={{
+                        color: "#6b7280",
+                        flex: "0 0 38%",
+                        fontSize: 13,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                      title={file.name}
+                    >
+                      {file.name}
+                    </span>
+                    <Input
+                      onChange={(event) =>
+                        setFileNames((current) => ({ ...current, [file.uid]: event.target.value }))
+                      }
+                      placeholder="素材名称(留空则用文件名)"
+                      value={fileNames[file.uid] ?? ""}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="upload-options-grid">
               <div>
                 <p>类型</p>

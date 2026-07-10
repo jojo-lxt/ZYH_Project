@@ -14,7 +14,7 @@ export async function GET(
   if (auth.response) return auth.response;
 
   const { id } = await context.params;
-  const detail = await getConsolePropertyDetail(id);
+  const detail = await getConsolePropertyDetail(id, auth.user);
 
   if (!detail) {
     return Response.json({ error: "楼盘不存在" }, { status: 404 });
@@ -32,7 +32,7 @@ export async function PATCH(
 
   const { id } = await context.params;
   try {
-    const property = await updateConsoleProperty(id, await request.json());
+    const property = await updateConsoleProperty(id, await request.json(), auth.user);
 
     if (!property) {
       return Response.json({ error: "楼盘不存在" }, { status: 404 });
@@ -54,7 +54,7 @@ export async function DELETE(
   const { id } = await context.params;
 
   try {
-    return Response.json({ deleted: await deleteConsoleProperty(id) });
+    return Response.json({ deleted: await deleteConsoleProperty(id, auth.user) });
   } catch (error) {
     return jsonError(error, "项目删除失败");
   }

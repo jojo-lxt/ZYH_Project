@@ -38,7 +38,6 @@ PostgreSQL 本机数据库
 | `<管理员手机号>` | 后台第一个管理员登录手机号 | 11 位手机号 |
 | `<管理员登录密码>` | 后台第一个管理员登录密码 | 至少 8 位，使用强密码 |
 | `<管理员姓名>` | 后台第一个管理员显示名 | `管理员` |
-| `<管理员默认项目>` | 管理员默认有权限的项目名 | 没有项目时可先填 `-` |
 
 如果你的域名暂时没有备案或没有解析到服务器，可以先跳过 HTTPS 部分，先用服务器公网 IP 测试项目。
 
@@ -421,7 +420,7 @@ PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publi
 如果你需要把现有假数据导入数据库，可以后续单独写 seed 脚本。
 ```
 
-创建第一个后台管理员账号。必须替换 `<数据库密码>`、`<管理员手机号>`、`<管理员登录密码>`、`<管理员姓名>`、`<管理员默认项目>`：
+创建第一个后台管理员账号。必须替换 `<数据库密码>`、`<管理员手机号>`、`<管理员登录密码>`、`<管理员姓名>`：
 
 ```bash
 cd /home/ubuntu/content-publisher-console
@@ -429,18 +428,17 @@ ADMIN_PASSWORD_HASH="$(node scripts/hash-password.mjs '<管理员登录密码>')
 PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher \
   -v admin_phone="<管理员手机号>" \
   -v admin_name="<管理员姓名>" \
-  -v admin_property="<管理员默认项目>" \
   -v admin_password_hash="${ADMIN_PASSWORD_HASH}" \
   -f database/seed-admin.sql
 ```
 
-`database/seed-admin.sql` 使用 `ON CONFLICT (phone) DO UPDATE`，可以重复执行；已存在同手机号管理员时会更新姓名、项目、密码 hash 和状态，不会插入重复账号。
+`database/seed-admin.sql` 使用 `ON CONFLICT (phone) DO UPDATE`，可以重复执行；已存在同手机号管理员时会更新姓名、密码 hash 和状态，不会插入重复账号。管理员登录后可自行创建项目，项目归属到该账号(`properties.owner_id`)。
 
-验证管理员账号已写入：
+验证管理员账号已写入:
 
 ```bash
 PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher \
-  -c "SELECT name, phone, role, property, status FROM console_users;"
+  -c "SELECT name, phone, role, status FROM console_users;"
 ```
 
 ## 11. 创建生产环境变量

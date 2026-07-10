@@ -108,7 +108,7 @@ ssh ubuntu@<服务器公网IP>
 src/features/console/components/ConsoleShell.tsx
 ```
 
-顶栏项目切换按**项目 id**工作(默认取用户绑定 `property` 名字匹配的项目 id,否则第一个项目)。选中的项目 id 通过 RTK Query baseQuery 注入的 `X-Project-Id` 请求头发给后端;`materials`、`config_nodes`(标签/卖点)、`notes`、`strategy_*` 的读写都按 `property_id` 隔离,切换项目即切换数据。图片走 `<img>` 加载、无法带请求头,所以图片接口只做登录校验、不按项目过滤(见 `getMaterialFile` 注释)。服务端用 `requireConsoleProject(request)` 统一校验登录态 + 取当前项目 id。**注意**:项目 id 虽然是通过 `X-Project-Id` 头传的,但每个按项目隔离的 RTK Query 都把当前项目 id 作为**参数**传入(从而进入缓存键),并在项目未选定时 `skip` 不发请求 —— 这样切换项目会因缓存键变化自动重拉,首次也不会发出不带项目 id 的空请求(见 `ConfigPage`/`MaterialsPage`/`OverviewDashboard`/`UploadImagePage` 里的 `useGet*Query(currentProject, { skip: !currentProject })`)。**不要**改回用 `resetApiState` 清缓存:它会把刚拉到的数据一并清掉、导致「接口返回了数据但页面不显示」。
+顶栏项目切换按**项目 id**工作,当前项目 id 放在 **URL 查询参数 `?project=`** 里(刷新后仍停在同一项目;`ConsoleShell` 用 `useSearchParams` 读、切换时 `router.replace` 改),默认取用户的第一个项目。**项目按创建者归属**:`properties.owner_id` 指向创建者,`getProperties` 只返回当前用户的项目(`role='管理员'` 看全部),`requireConsoleProject` 校验用户能否访问该项目、防止用请求头越权;图片接口(`<img>` 带不了头但带 cookie)改按**用户归属**过滤(`getMaterialFile`)。选中的项目 id 通过 RTK Query baseQuery 注入的 `X-Project-Id` 请求头发给后端;`materials`、`config_nodes`(标签/卖点)、`notes`、`strategy_*` 的读写都按 `property_id` 隔离,切换项目即切换数据。图片走 `<img>` 加载、无法带请求头,所以图片接口只做登录校验、不按项目过滤(见 `getMaterialFile` 注释)。服务端用 `requireConsoleProject(request)` 统一校验登录态 + 取当前项目 id。**注意**:项目 id 虽然是通过 `X-Project-Id` 头传的,但每个按项目隔离的 RTK Query 都把当前项目 id 作为**参数**传入(从而进入缓存键),并在项目未选定时 `skip` 不发请求 —— 这样切换项目会因缓存键变化自动重拉,首次也不会发出不带项目 id 的空请求(见 `ConfigPage`/`MaterialsPage`/`OverviewDashboard`/`UploadImagePage` 里的 `useGet*Query(currentProject, { skip: !currentProject })`)。**不要**改回用 `resetApiState` 清缓存:它会把刚拉到的数据一并清掉、导致「接口返回了数据但页面不显示」。
 
 ## 登录和鉴权
 
@@ -247,6 +247,9 @@ draft_images
 - 项目管理增删改查
 - 新建项目自动生成默认渠道二维码（写入 `property_channels`）
 - 素材/标签/卖点/概览/策略按项目 `property_id` 隔离（顶栏切换项目,前端 `X-Project-Id` 头,后端 `requireConsoleProject`）
+- 项目按创建者归属（`properties.owner_id`）:普通用户只看/操作自己的项目,管理员(`role='管理员'`)看全部;当前项目存在 URL `?project=`,刷新后保持
+- 建用户时不再要求填默认项目(登录后自建,项目归本人);上传图片可逐张自定义名称(留空用文件名)
+- `console_users` 已移除废弃的 `property` 字段(权限改由 `properties.owner_id` 决定);`role` 仅允许「管理员」「游客」两种,数据库有 `CHECK` 约束、服务层 `normalizeRole` 也会校验,应用只把「管理员」当管理员、其余按普通用户处理
 - 扫码公开预览:`/p/<项目id>` 中间页 → 小程序按 projectId 拉「随机 5 张图 + AI 文案」(可换一批;文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底)
 - 发布存档:小程序确认发布写 `publish_records`（只存 material_ids 引用 + 文案 + 发布人/渠道,不复制图片字节）
 - 用户管理增删改查

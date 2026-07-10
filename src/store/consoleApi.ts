@@ -83,7 +83,6 @@ export const consoleApi = createApi({
         name: string;
         password: string;
         phone: string;
-        property: string;
         role: string;
       }
     >({

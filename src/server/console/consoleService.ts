@@ -1,5 +1,24 @@
 import * as consoleRepository from "@/server/console/consoleRepository";
 import type { ConsoleOverviewQuery, ConsoleStrategyQuery } from "@/shared/types/console";
+import type { AuthUser } from "@/shared/types/auth";
+
+// 普通用户只操作自己创建的项目;管理员(role='管理员')可操作全部。
+function scopeOf(user: AuthUser) {
+  return { isAdmin: user.role === "管理员", userId: user.id };
+}
+
+// 角色只允许「管理员」「游客」两种(与数据库 CHECK 约束一致),缺省为「游客」。
+const VALID_ROLES = ["管理员", "游客"] as const;
+
+function normalizeRole(role?: string) {
+  const value = role?.trim() || "游客";
+
+  if (!VALID_ROLES.includes(value as (typeof VALID_ROLES)[number])) {
+    throw new Error(`角色只能是「管理员」或「游客」`);
+  }
+
+  return value;
+}
 
 export async function getConsoleOverview(propertyId: string, filters: ConsoleOverviewQuery = {}) {
   return consoleRepository.getOverview(propertyId, filters);
@@ -46,8 +65,8 @@ export async function createMaterialUpload(formData: FormData, propertyId: strin
   return consoleRepository.createMaterialUpload(formData, propertyId);
 }
 
-export async function getConsoleMaterialFile(id: number) {
-  return consoleRepository.getMaterialFile(id);
+export async function getConsoleMaterialFile(id: number, user: AuthUser) {
+  return consoleRepository.getMaterialFile(id, scopeOf(user));
 }
 
 export async function getConsoleTagConfig(propertyId: string) {
@@ -104,8 +123,8 @@ export async function deleteConsoleConfigItem(id: string, propertyId: string) {
   return consoleRepository.deleteConfigItem(id, propertyId);
 }
 
-export async function getConsoleProperties() {
-  return consoleRepository.getProperties();
+export async function getConsoleProperties(user: AuthUser) {
+  return consoleRepository.getProperties(scopeOf(user));
 }
 
 export async function createConsoleProperty(
@@ -117,6 +136,7 @@ export async function createConsoleProperty(
     type?: string;
   },
   detailBaseUrl: string,
+  ownerId: string,
 ) {
   if (!body.developer?.trim() || !body.name?.trim()) {
     throw new Error("开发商和项目名称不能为空");
@@ -131,6 +151,7 @@ export async function createConsoleProperty(
       type: body.type?.trim() || "住宅",
     },
     detailBaseUrl,
+    ownerId,
   );
 }
 
@@ -143,22 +164,27 @@ export async function updateConsoleProperty(
     stage?: string;
     type?: string;
   },
+  user: AuthUser,
 ) {
-  return consoleRepository.updateProperty(id, {
-    address: body.address?.trim(),
-    developer: body.developer?.trim(),
-    name: body.name?.trim(),
-    stage: body.stage?.trim(),
-    type: body.type?.trim(),
-  });
+  return consoleRepository.updateProperty(
+    id,
+    {
+      address: body.address?.trim(),
+      developer: body.developer?.trim(),
+      name: body.name?.trim(),
+      stage: body.stage?.trim(),
+      type: body.type?.trim(),
+    },
+    scopeOf(user),
+  );
 }
 
-export async function deleteConsoleProperty(id: string) {
-  return consoleRepository.deleteProperty(id);
+export async function deleteConsoleProperty(id: string, user: AuthUser) {
+  return consoleRepository.deleteProperty(id, scopeOf(user));
 }
 
-export async function getConsolePropertyDetail(id: string) {
-  return consoleRepository.getPropertyDetail(id);
+export async function getConsolePropertyDetail(id: string, user: AuthUser) {
+  return consoleRepository.getPropertyDetail(id, scopeOf(user));
 }
 
 export async function getConsoleUsers() {
@@ -169,7 +195,6 @@ export async function createConsoleUser(body: {
   name?: string;
   password?: string;
   phone?: string;
-  property?: string;
   role?: string;
 }) {
   const phone = body.phone?.trim() ?? "";
@@ -190,8 +215,7 @@ export async function createConsoleUser(body: {
     name: body.name.trim(),
     password: body.password,
     phone,
-    property: body.property?.trim() || "-",
-    role: body.role?.trim() || "游客",
+    role: normalizeRole(body.role),
   });
 }
 
@@ -201,7 +225,6 @@ export async function updateConsoleUser(
     name?: string;
     password?: string;
     phone?: string;
-    property?: string;
     role?: string;
     status?: string;
   },
@@ -220,8 +243,7 @@ export async function updateConsoleUser(
     name: body.name?.trim(),
     password: body.password || undefined,
     phone,
-    property: body.property?.trim(),
-    role: body.role?.trim(),
+    role: body.role === undefined ? undefined : normalizeRole(body.role),
     status: body.status?.trim(),
   });
 }
