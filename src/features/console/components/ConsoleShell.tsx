@@ -80,22 +80,25 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
   const isMaterialsRoute = pathname.startsWith("/materials");
   const [openKeys, setOpenKeys] = useState(["module", "config"]);
   const { data: propertiesData } = useGetPropertiesQuery();
-  const projectOptions = useMemo(() => {
-    const options = (propertiesData?.properties ?? []).map((property) => ({
-      label: property.name,
-      value: property.name,
-    }));
+  // 项目切换器按「项目 id」工作(而非项目名),后端据此隔离数据。
+  const projectOptions = useMemo(
+    () =>
+      (propertiesData?.properties ?? []).map((property) => ({
+        label: property.name,
+        value: property.key,
+      })),
+    [propertiesData?.properties],
+  );
+  // 默认项目:用户绑定项目(按名字匹配)对应的 id,匹配不上则取第一个项目。
+  const defaultProjectId = useMemo(() => {
     const userProperty = currentUser.property.trim();
+    const bound = (propertiesData?.properties ?? []).find((property) => property.name === userProperty);
 
-    if (userProperty && userProperty !== "-" && !options.some((item) => item.value === userProperty)) {
-      return [{ label: userProperty, value: userProperty }, ...options];
-    }
-
-    return options;
+    return bound?.key ?? propertiesData?.properties[0]?.key ?? "";
   }, [currentUser.property, propertiesData?.properties]);
   const selectedProject = currentProject && projectOptions.some((item) => item.value === currentProject)
     ? currentProject
-    : projectOptions[0]?.value ?? "";
+    : defaultProjectId;
 
   useEffect(() => {
     if (selectedProject && selectedProject !== currentProject) {

@@ -10,6 +10,8 @@ import {
   useGetTagConfigQuery,
   useUpdateConfigItemMutation,
 } from "@/store/consoleApi";
+import { selectConsoleCurrentProject } from "@/store/consoleSlice";
+import { useAppSelector } from "@/store/hooks";
 import type { ConfigTreeItem, ConsoleConfigResponse } from "@/shared/types/console";
 
 type ConfigKind = "selling" | "tag";
@@ -76,10 +78,11 @@ function getFirstConfigId(items: ConfigTreeItem[]) {
 
 export function ConfigPage({ title }: { title: string }) {
   const { message } = App.useApp();
+  const currentProject = useAppSelector(selectConsoleCurrentProject);
   const isSellingPoint = title.includes("卖点");
   const configKind: ConfigKind = isSellingPoint ? "selling" : "tag";
-  const { data: tagApiData = emptyConfigData } = useGetTagConfigQuery();
-  const { data: sellingApiData = emptyConfigData } = useGetSellingPointConfigQuery();
+  const { data: tagApiData = emptyConfigData } = useGetTagConfigQuery(currentProject, { skip: !currentProject });
+  const { data: sellingApiData = emptyConfigData } = useGetSellingPointConfigQuery(currentProject, { skip: !currentProject });
   const [createConfigItem] = useCreateConfigItemMutation();
   const [deleteConfigItemMutation] = useDeleteConfigItemMutation();
   const [updateConfigItemMutation] = useUpdateConfigItemMutation();

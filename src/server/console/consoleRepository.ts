@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "@/server/auth/password";
+import { buildProjectScanUrl } from "@/server/console/propertyDetailUrl";
 import { query, queryOne, queryRows, withTransaction } from "@/server/db";
 import type {
   ConfigTreeItem,
@@ -213,9 +214,13 @@ function isDateText(value?: string) {
   return Boolean(value && /^\d{4}-\d{2}-\d{2}$/.test(value));
 }
 
-function buildNotesWhere(filters: ConsoleOverviewQuery, columns: NotesColumnInfo) {
+function buildNotesWhere(filters: ConsoleOverviewQuery, columns: NotesColumnInfo, propertyId: string) {
   const clauses: string[] = [];
   const values: unknown[] = [];
+
+  // 始终按当前项目过滤 notes(概览/策略共用)。
+  values.push(propertyId);
+  clauses.push(`property_id = $${values.length}`);
 
   function addArrayFilter(column: string | undefined, filterValues: string[]) {
     if (!column) {
@@ -372,7 +377,7 @@ function buildConfigTree(rows: ConfigNodeRow[]) {
   return roots;
 }
 
-async function getConfigRows(configType: ConfigType) {
+async function getConfigRows(configType: ConfigType, propertyId: string) {
   return queryRows<ConfigNodeRow>(
     `
       SELECT
@@ -384,11 +389,11 @@ async function getConfigRows(configType: ConfigType) {
         COALESCE(array_remove(array_agg(m.mode ORDER BY m.mode), NULL), '{}') AS modes
       FROM config_nodes n
       LEFT JOIN config_node_modes m ON m.node_id = n.id
-      WHERE n.config_type = $1
+      WHERE n.config_type = $1 AND n.property_id = $2
       GROUP BY n.id
       ORDER BY COALESCE(n.parent_id, n.id), n.parent_id NULLS FIRST, n.sort_order, n.name
     `,
-    [configType],
+    [configType, propertyId],
   );
 }
 
@@ -410,9 +415,12 @@ function toQuickGroups(tree: ConfigTreeItem[]): QuickTagGroup[] {
   }));
 }
 
-export async function getOverview(filters: ConsoleOverviewQuery = {}): Promise<ConsoleOverviewResponse> {
+export async function getOverview(
+  propertyId: string,
+  filters: ConsoleOverviewQuery = {},
+): Promise<ConsoleOverviewResponse> {
   const columns = await getNotesColumnInfo();
-  const { values, where } = buildNotesWhere(filters, columns);
+  const { values, where } = buildNotesWhere(filters, columns, propertyId);
   const commentsExpr = metricExpression(columns.comments);
   const collectsExpr = metricExpression(columns.collects);
   const sharesExpr = metricExpression(columns.shares);
@@ -663,9 +671,12 @@ function buildStrategyResponse(
   };
 }
 
-export async function getStrategy(filters: ConsoleStrategyQuery = {}): Promise<ConsoleStrategyResponse> {
+export async function getStrategy(
+  propertyId: string,
+  filters: ConsoleStrategyQuery = {},
+): Promise<ConsoleStrategyResponse> {
   const columns = await getNotesColumnInfo();
-  const { values, where } = buildNotesWhere(filters, columns);
+  const { values, where } = buildNotesWhere(filters, columns, propertyId);
   const commentsExpr = metricExpression(columns.comments);
   const collectsExpr = metricExpression(columns.collects);
   const sharesExpr = metricExpression(columns.shares);
@@ -680,15 +691,19 @@ export async function getStrategy(filters: ConsoleStrategyQuery = {}): Promise<C
       `
         SELECT label, left_label AS left, left_width, right_label AS right, right_width
         FROM strategy_heat_rows
+        WHERE property_id = $1
         ORDER BY sort_order, label
       `,
+      [propertyId],
     ),
     queryRows<{ count: number; label: string }>(
       `
         SELECT label, count
         FROM strategy_keywords
+        WHERE property_id = $1
         ORDER BY sort_order, count DESC, label
       `,
+      [propertyId],
     ),
     queryRows<NoteStrategyRow>(
       `
@@ -720,7 +735,7 @@ export async function getStrategy(filters: ConsoleStrategyQuery = {}): Promise<C
   );
 }
 
-export async function getMaterials(): Promise<ConsoleMaterialsResponse> {
+export async function getMaterials(propertyId: string): Promise<ConsoleMaterialsResponse> {
   const [materials, total, filterGroups] = await Promise.all([
     queryRows<MaterialRow>(
       `
@@ -743,18 +758,24 @@ export async function getMaterials(): Promise<ConsoleMaterialsResponse> {
           COALESCE(array_remove(array_agg(t.tag) FILTER (WHERE t.kind = 'selling'), NULL), '{}') AS selling_tags
         FROM materials m
         LEFT JOIN material_tags t ON t.material_id = m.id
+        WHERE m.property_id = $1
         GROUP BY m.id
         ORDER BY m.updated_at DESC, m.id DESC
       `,
+      [propertyId],
     ),
-    queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM materials"),
+    queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM materials WHERE property_id = $1",
+      [propertyId],
+    ),
     queryRows<{ name: string }>(
       `
         SELECT name
         FROM config_nodes
-        WHERE config_type = 'tag' AND parent_id IS NULL
+        WHERE config_type = 'tag' AND parent_id IS NULL AND property_id = $1
         ORDER BY sort_order, name
       `,
+      [propertyId],
     ),
   ]);
 
@@ -765,10 +786,10 @@ export async function getMaterials(): Promise<ConsoleMaterialsResponse> {
   };
 }
 
-export async function getMaterialUploadOptions(): Promise<MaterialUploadResponse> {
+export async function getMaterialUploadOptions(propertyId: string): Promise<MaterialUploadResponse> {
   const [attributeTree, sellingPointTree] = await Promise.all([
-    getConfigRows("tag"),
-    getConfigRows("selling_point"),
+    getConfigRows("tag", propertyId),
+    getConfigRows("selling_point", propertyId),
   ]);
 
   return {
@@ -777,7 +798,7 @@ export async function getMaterialUploadOptions(): Promise<MaterialUploadResponse
   };
 }
 
-export async function createMaterialUpload(formData: FormData) {
+export async function createMaterialUpload(formData: FormData, propertyId: string) {
   const files = formData
     .getAll("images")
     .filter((value): value is File => value instanceof File);
@@ -795,13 +816,13 @@ export async function createMaterialUpload(formData: FormData) {
       const materialResult = await client.query<{ id: number }>(
         `
           INSERT INTO materials (
-            title, category, platforms, size_text, file_size_bytes, image_url, stage, tone, uploader,
+            property_id, title, category, platforms, size_text, file_size_bytes, image_url, stage, tone, uploader,
             color, accent, uploaded_at, updated_at
           )
-          VALUES ($1, $2, $3, '-', $4, '', $5, '-', '系统上传', '#d8dee9', '#64748b', now(), now())
+          VALUES ($6, $1, $2, $3, '-', $4, '', $5, '-', '系统上传', '#d8dee9', '#64748b', now(), now())
           RETURNING id
         `,
-        [title, category, platforms, file.size, stage],
+        [title, category, platforms, file.size, stage, propertyId],
       );
       const id = materialResult.rows[0]?.id;
 
@@ -840,6 +861,8 @@ export async function createMaterialUpload(formData: FormData) {
   };
 }
 
+// 图片走 <img src> 加载,浏览器无法带上 X-Project-Id 头,所以图片接口只做登录校验、不按项目过滤。
+// 现有模型下任何登录用户本就能切到任意项目、看到全部素材,不构成新的越权。
 export async function getMaterialFile(id: number) {
   return queryOne<MaterialFileRow>(
     `
@@ -853,6 +876,7 @@ export async function getMaterialFile(id: number) {
 
 export async function updateMaterial(
   id: number,
+  propertyId: string,
   patch: {
     category?: string;
     platforms?: string[];
@@ -867,29 +891,47 @@ export async function updateMaterial(
         platforms = COALESCE($3, platforms),
         stage = COALESCE($4, stage),
         updated_at = now()
-      WHERE id = $1
+      WHERE id = $1 AND property_id = $5
       RETURNING id, title, category, platforms, size_text AS size, file_size_bytes, image_url,
         stage, tone, uploader, color, accent, uploaded_at, updated_at,
         '{}'::text[] AS attribute_tags,
         '{}'::text[] AS selling_tags
     `,
-    [id, patch.category ?? null, patch.platforms ?? null, patch.stage ?? null],
+    [id, patch.category ?? null, patch.platforms ?? null, patch.stage ?? null, propertyId],
   );
 
   return row ? mapMaterial(row) : null;
 }
 
-export async function deleteMaterials(ids: number[]) {
+export async function deleteMaterials(ids: number[], propertyId: string) {
   if (ids.length === 0) {
     return 0;
   }
 
-  const result = await query("DELETE FROM materials WHERE id = ANY($1::int[])", [ids]);
+  const result = await query(
+    "DELETE FROM materials WHERE id = ANY($1::int[]) AND property_id = $2",
+    [ids, propertyId],
+  );
   return result.rowCount ?? 0;
 }
 
-export async function setMaterialTags(id: number, kind: "attribute" | "selling", tags: string[]) {
+export async function setMaterialTags(
+  id: number,
+  propertyId: string,
+  kind: "attribute" | "selling",
+  tags: string[],
+) {
   await withTransaction(async (client) => {
+    // 确认该素材属于当前项目,防止跨项目改标签。
+    const owns = await client.query("SELECT 1 FROM materials WHERE id = $1 AND property_id = $2", [
+      id,
+      propertyId,
+    ]);
+
+    if (owns.rowCount === 0) {
+      throw new Error("素材不存在");
+    }
+
     await client.query(
       "DELETE FROM material_tags WHERE material_id = $1 AND kind = $2",
       [id, kind],
@@ -910,8 +952,8 @@ export async function setMaterialTags(id: number, kind: "attribute" | "selling",
   });
 }
 
-export async function getTagConfig(): Promise<ConsoleConfigResponse> {
-  const tree = buildConfigTree(await getConfigRows("tag"));
+export async function getTagConfig(propertyId: string): Promise<ConsoleConfigResponse> {
+  const tree = buildConfigTree(await getConfigRows("tag", propertyId));
 
   return {
     allowPrimaryCreate: true,
@@ -921,8 +963,8 @@ export async function getTagConfig(): Promise<ConsoleConfigResponse> {
   };
 }
 
-export async function getSellingPointConfig(): Promise<ConsoleConfigResponse> {
-  const tree = buildConfigTree(await getConfigRows("selling_point"));
+export async function getSellingPointConfig(propertyId: string): Promise<ConsoleConfigResponse> {
+  const tree = buildConfigTree(await getConfigRows("selling_point", propertyId));
 
   return {
     allowPrimaryCreate: true,
@@ -939,12 +981,14 @@ export async function createConfigItem({
   modes = [],
   name,
   parentId,
+  propertyId,
 }: {
   configType: ConfigType;
   description?: string;
   modes?: string[];
   name: string;
   parentId: string | null;
+  propertyId: string;
 }) {
   const id = `${configType === "selling_point" ? "sell" : "attr"}-${randomUUID()}`;
 
@@ -953,17 +997,17 @@ export async function createConfigItem({
       `
         SELECT COALESCE(MAX(sort_order), 0) + 1 AS sort_order
         FROM config_nodes
-        WHERE config_type = $1 AND parent_id IS NOT DISTINCT FROM $2
+        WHERE config_type = $1 AND parent_id IS NOT DISTINCT FROM $2 AND property_id = $3
       `,
-      [configType, parentId],
+      [configType, parentId, propertyId],
     );
 
     await client.query(
       `
-        INSERT INTO config_nodes (id, config_type, parent_id, name, description, sort_order)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO config_nodes (id, config_type, parent_id, name, description, sort_order, property_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
       `,
-      [id, configType, parentId, name, description ?? null, sortResult.rows[0]?.sort_order ?? 1],
+      [id, configType, parentId, name, description ?? null, sortResult.rows[0]?.sort_order ?? 1, propertyId],
     );
 
     for (const mode of modes) {
@@ -979,6 +1023,7 @@ export async function createConfigItem({
 
 export async function updateConfigItem(
   id: string,
+  propertyId: string,
   patch: {
     description?: string;
     modes?: string[];
@@ -986,6 +1031,16 @@ export async function updateConfigItem(
   },
 ) {
   await withTransaction(async (client) => {
+    // 确认该配置项属于当前项目,防止跨项目修改。
+    const owns = await client.query("SELECT 1 FROM config_nodes WHERE id = $1 AND property_id = $2", [
+      id,
+      propertyId,
+    ]);
+
+    if (owns.rowCount === 0) {
+      throw new Error("配置项不存在");
+    }
+
     await client.query(
       `
         UPDATE config_nodes
@@ -993,9 +1048,9 @@ export async function updateConfigItem(
           name = COALESCE($2, name),
           description = $3,
           updated_at = now()
-        WHERE id = $1
+        WHERE id = $1 AND property_id = $4
       `,
-      [id, patch.name ?? null, patch.description ?? null],
+      [id, patch.name ?? null, patch.description ?? null, propertyId],
     );
 
     if (patch.modes) {
@@ -1011,8 +1066,8 @@ export async function updateConfigItem(
   });
 }
 
-export async function deleteConfigItem(id: string) {
-  const result = await query("DELETE FROM config_nodes WHERE id = $1", [id]);
+export async function deleteConfigItem(id: string, propertyId: string) {
+  const result = await query("DELETE FROM config_nodes WHERE id = $1 AND property_id = $2", [id, propertyId]);
   return result.rowCount ?? 0;
 }
 
@@ -1034,17 +1089,37 @@ export async function getProperties(): Promise<ConsolePropertiesResponse> {
   };
 }
 
-export async function createProperty(input: Omit<PropertyRow, "createdAt" | "key">) {
-  const row = await queryOne<PropertyDbRow>(
-    `
-      INSERT INTO properties (id, developer, name, type, stage, address, description)
-      VALUES ($1, $2, $3, $4, $5, $6, '-')
-      RETURNING id, developer, name, type, stage, address, description, created_at
-    `,
-    [randomUUID(), input.developer, input.name, input.type, input.stage, input.address],
-  );
+export async function createProperty(
+  input: Omit<PropertyRow, "createdAt" | "key">,
+  detailBaseUrl: string,
+) {
+  return withTransaction(async (client) => {
+    const id = randomUUID();
+    const result = await client.query<PropertyDbRow>(
+      `
+        INSERT INTO properties (id, developer, name, type, stage, address, description)
+        VALUES ($1, $2, $3, $4, $5, $6, '-')
+        RETURNING id, developer, name, type, stage, address, description, created_at
+      `,
+      [id, input.developer, input.name, input.type, input.stage, input.address],
+    );
 
-  return row ? mapProperty(row) : null;
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    // 新建项目时自动生成一条默认渠道,详情页据此渲染二维码 / NFC 链接。
+    await client.query(
+      `
+        INSERT INTO property_channels (property_id, label, qr_value, sort_order)
+        VALUES ($1, $2, $3, 0)
+      `,
+      [id, "默认渠道", buildProjectScanUrl(detailBaseUrl, id)],
+    );
+
+    return mapProperty(row);
+  });
 }
 
 export async function updateProperty(id: string, input: Partial<Omit<PropertyRow, "createdAt" | "key">>) {

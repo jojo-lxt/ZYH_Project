@@ -1,63 +1,66 @@
 import * as consoleRepository from "@/server/console/consoleRepository";
 import type { ConsoleOverviewQuery, ConsoleStrategyQuery } from "@/shared/types/console";
 
-export async function getConsoleOverview(filters: ConsoleOverviewQuery = {}) {
-  return consoleRepository.getOverview(filters);
+export async function getConsoleOverview(propertyId: string, filters: ConsoleOverviewQuery = {}) {
+  return consoleRepository.getOverview(propertyId, filters);
 }
 
-export async function getConsoleStrategy(filters: ConsoleStrategyQuery = {}) {
-  return consoleRepository.getStrategy(filters);
+export async function getConsoleStrategy(propertyId: string, filters: ConsoleStrategyQuery = {}) {
+  return consoleRepository.getStrategy(propertyId, filters);
 }
 
-export async function getConsoleMaterials() {
-  return consoleRepository.getMaterials();
+export async function getConsoleMaterials(propertyId: string) {
+  return consoleRepository.getMaterials(propertyId);
 }
 
 export async function updateConsoleMaterial(
   id: number,
+  propertyId: string,
   patch: {
     category?: string;
     platforms?: string[];
     stage?: string;
   },
 ) {
-  return consoleRepository.updateMaterial(id, patch);
+  return consoleRepository.updateMaterial(id, propertyId, patch);
 }
 
-export async function deleteConsoleMaterials(ids: number[]) {
-  return consoleRepository.deleteMaterials(ids);
+export async function deleteConsoleMaterials(ids: number[], propertyId: string) {
+  return consoleRepository.deleteMaterials(ids, propertyId);
 }
 
 export async function setConsoleMaterialTags(
   id: number,
+  propertyId: string,
   kind: "attribute" | "selling",
   tags: string[],
 ) {
-  return consoleRepository.setMaterialTags(id, kind, tags);
+  return consoleRepository.setMaterialTags(id, propertyId, kind, tags);
 }
 
-export async function getMaterialUploadOptions() {
-  return consoleRepository.getMaterialUploadOptions();
+export async function getMaterialUploadOptions(propertyId: string) {
+  return consoleRepository.getMaterialUploadOptions(propertyId);
 }
 
-export async function createMaterialUpload(formData: FormData) {
-  return consoleRepository.createMaterialUpload(formData);
+export async function createMaterialUpload(formData: FormData, propertyId: string) {
+  return consoleRepository.createMaterialUpload(formData, propertyId);
 }
 
 export async function getConsoleMaterialFile(id: number) {
   return consoleRepository.getMaterialFile(id);
 }
 
-export async function getConsoleTagConfig() {
-  return consoleRepository.getTagConfig();
+export async function getConsoleTagConfig(propertyId: string) {
+  return consoleRepository.getTagConfig(propertyId);
 }
 
-export async function getConsoleSellingPointConfig() {
-  return consoleRepository.getSellingPointConfig();
+export async function getConsoleSellingPointConfig(propertyId: string) {
+  return consoleRepository.getSellingPointConfig(propertyId);
 }
 
 export async function createConsoleConfigItem(
   configType: "selling_point" | "tag",
+  propertyId: string,
   body: {
     description?: string;
     modes?: string[];
@@ -77,50 +80,58 @@ export async function createConsoleConfigItem(
     modes: body.modes ?? [],
     name,
     parentId: body.parentId ?? null,
+    propertyId,
   });
 }
 
 export async function updateConsoleConfigItem(
   id: string,
+  propertyId: string,
   body: {
     description?: string;
     modes?: string[];
     name?: string;
   },
 ) {
-  return consoleRepository.updateConfigItem(id, {
+  return consoleRepository.updateConfigItem(id, propertyId, {
     description: body.description?.trim() || undefined,
     modes: body.modes,
     name: body.name?.trim(),
   });
 }
 
-export async function deleteConsoleConfigItem(id: string) {
-  return consoleRepository.deleteConfigItem(id);
+export async function deleteConsoleConfigItem(id: string, propertyId: string) {
+  return consoleRepository.deleteConfigItem(id, propertyId);
 }
 
 export async function getConsoleProperties() {
   return consoleRepository.getProperties();
 }
 
-export async function createConsoleProperty(body: {
-  address?: string;
-  developer?: string;
-  name?: string;
-  stage?: string;
-  type?: string;
-}) {
+export async function createConsoleProperty(
+  body: {
+    address?: string;
+    developer?: string;
+    name?: string;
+    stage?: string;
+    type?: string;
+  },
+  detailBaseUrl: string,
+) {
   if (!body.developer?.trim() || !body.name?.trim()) {
     throw new Error("开发商和项目名称不能为空");
   }
 
-  return consoleRepository.createProperty({
-    address: body.address?.trim() ?? "",
-    developer: body.developer.trim(),
-    name: body.name.trim(),
-    stage: body.stage?.trim() || "现房在售",
-    type: body.type?.trim() || "住宅",
-  });
+  return consoleRepository.createProperty(
+    {
+      address: body.address?.trim() ?? "",
+      developer: body.developer.trim(),
+      name: body.name.trim(),
+      stage: body.stage?.trim() || "现房在售",
+      type: body.type?.trim() || "住宅",
+    },
+    detailBaseUrl,
+  );
 }
 
 export async function updateConsoleProperty(

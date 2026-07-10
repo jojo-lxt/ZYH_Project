@@ -5,6 +5,8 @@ import { AppstoreOutlined, ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOut
 import { App, Button, Checkbox, Progress, Radio, Select, Space, Steps, Tabs, Tag, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useGetMaterialUploadOptionsQuery, useUpdateMaterialTagsMutation } from "@/store/consoleApi";
+import { selectConsoleCurrentProject } from "@/store/consoleSlice";
+import { useAppSelector } from "@/store/hooks";
 import type { MaterialUploadResponse, QuickTagGroup } from "@/shared/types/console";
 
 const emptyUploadOptions: MaterialUploadResponse = {
@@ -167,7 +169,8 @@ function QuickTagPanel({
 
 export function MaterialUploadImagePage() {
   const { message } = App.useApp();
-  const { data = emptyUploadOptions } = useGetMaterialUploadOptionsQuery();
+  const currentProject = useAppSelector(selectConsoleCurrentProject);
+  const { data = emptyUploadOptions } = useGetMaterialUploadOptionsQuery(currentProject, { skip: !currentProject });
   const [updateMaterialTags] = useUpdateMaterialTagsMutation();
   const [step, setStep] = useState(0);
   const [taggingMode, setTaggingMode] = useState<"choice" | "tagging">("choice");
@@ -210,6 +213,8 @@ export function MaterialUploadImagePage() {
     try {
       const response = await fetch("/api/console/materials/upload", {
         body: formData,
+        // 上传走原生 fetch,不经过 RTK Query,需手动带上当前项目 id。
+        headers: currentProject ? { "X-Project-Id": currentProject } : undefined,
         method: "POST",
       });
 

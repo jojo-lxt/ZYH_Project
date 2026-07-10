@@ -407,6 +407,16 @@ draft_images
 
 ```text
 这个脚本只建表和补充缺失字段，不会清空已有数据。
+
+**按项目隔离迁移(2026-07-09 起)**：业务表新增了 `NOT NULL` 的 `property_id` 列。**已有开发库**需先清空再建表(空表才能加 `NOT NULL` 列),按顺序执行:
+
+```bash
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/reset-dev.sql
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/schema.sql
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/seed-admin.sql
+```
+
+`reset-dev.sql` 会 `TRUNCATE` 所有表(仅开发阶段用,会清空全部数据);全新库无需 reset,直接执行 `schema.sql` 即可。
 图片上传后的原图二进制保存在 material_files 表中，素材表 materials.image_url 指向读取原图的 API。
 如果你需要把现有假数据导入数据库，可以后续单独写 seed 脚本。
 ```
@@ -448,9 +458,15 @@ vim .env.production
 NODE_ENV=production
 DATABASE_URL="postgresql://content_app:<数据库密码>@localhost:5432/content_publisher"
 AUTH_COOKIE_SECURE="true"
+APP_BASE_URL="https://<你的域名或公网IP>"
 
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL=""
 NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL=""
+
+# 扫码预览的 AI 种草文案:OpenAI 兼容的国内大模型(DeepSeek / 通义千问 / 混元 / 智谱 GLM / Kimi 等)
+LLM_BASE_URL="https://api.deepseek.com/v1"
+LLM_API_KEY="<你的大模型 API Key>"
+LLM_MODEL="deepseek-chat"
 ```
 
 说明：
@@ -458,8 +474,10 @@ NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL=""
 ```text
 DATABASE_URL 是后端服务连接 PostgreSQL 的地址。
 AUTH_COOKIE_SECURE 控制登录 session cookie 是否只允许 HTTPS。正式环境应保持 true；如果临时用 http://<服务器公网IP>:3000 测试登录，可短暂设为 false，测试完成后再改回 true 并重启 PM2。
+APP_BASE_URL 是新建项目时自动生成的渠道二维码 / NFC 链接使用的基础域名，例如 https://your-domain.com。运行时读取，改了只需 pm2 restart content-publisher-console --update-env，不用 rebuild；不配置时会回退用请求来源域名（Nginx 反代下取 X-Forwarded-Host / X-Forwarded-Proto）。
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL 后续填小红书小程序跳转链接模板。
 NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL 后续填微信小程序跳转链接模板。
+LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 是「扫码预览」生成种草文案用的国内大模型,走 OpenAI 兼容的 /chat/completions 接口,换厂商只改这三个变量(可选 LLM_TIMEOUT_MS,默认 20000 毫秒)。腾讯云上优先考虑腾讯混元(同云内网最稳),或 DeepSeek(便宜简单)。不配置或调用失败时会用项目卖点/标签拼一段兜底文案,预览页不会空。
 ```
 
 后续接入腾讯云 COS 时，再补充类似下面的变量，具体名称以后按代码实现来定：

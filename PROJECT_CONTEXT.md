@@ -98,7 +98,8 @@ ssh ubuntu@<服务器公网IP>
 /properties                         项目管理
 /properties/detail                  项目详情
 /users                              用户管理
-/drafts/[id]                        手机扫码后的平台选择中间页
+/p/[projectId]                      项目扫码中间页(公开,二维码指向这里 → 跳小程序)
+/drafts/[id]                        旧:单条草稿平台选择中间页(将退役)
 ```
 
 后台 Shell：
@@ -107,7 +108,7 @@ ssh ubuntu@<服务器公网IP>
 src/features/console/components/ConsoleShell.tsx
 ```
 
-顶栏项目选择会优先使用当前登录用户的 `property`，并合并项目管理接口返回的项目列表。
+顶栏项目切换按**项目 id**工作(默认取用户绑定 `property` 名字匹配的项目 id,否则第一个项目)。选中的项目 id 通过 RTK Query baseQuery 注入的 `X-Project-Id` 请求头发给后端;`materials`、`config_nodes`(标签/卖点)、`notes`、`strategy_*` 的读写都按 `property_id` 隔离,切换项目即切换数据。图片走 `<img>` 加载、无法带请求头,所以图片接口只做登录校验、不按项目过滤(见 `getMaterialFile` 注释)。服务端用 `requireConsoleProject(request)` 统一校验登录态 + 取当前项目 id。**注意**:项目 id 虽然是通过 `X-Project-Id` 头传的,但每个按项目隔离的 RTK Query 都把当前项目 id 作为**参数**传入(从而进入缓存键),并在项目未选定时 `skip` 不发请求 —— 这样切换项目会因缓存键变化自动重拉,首次也不会发出不带项目 id 的空请求(见 `ConfigPage`/`MaterialsPage`/`OverviewDashboard`/`UploadImagePage` 里的 `useGet*Query(currentProject, { skip: !currentProject })`)。**不要**改回用 `resetApiState` 清缓存:它会把刚拉到的数据一并清掉、导致「接口返回了数据但页面不显示」。
 
 ## 登录和鉴权
 
@@ -152,6 +153,10 @@ src/app/api/
 POST /api/auth/login
 POST /api/auth/logout
 GET  /api/auth/me
+
+GET  /api/public/projects/[id]/preview                随机5张图 + AI文案(公开,扫码用)
+GET  /api/public/projects/[id]/materials/[mid]/image  素材图(公开,扫码用)
+POST /api/public/projects/[id]/publish                发布存档(公开,小程序调)
 
 GET  /api/console/overview
 GET  /api/console/strategy
@@ -229,6 +234,7 @@ strategy_heat_rows
 strategy_keywords
 properties
 property_channels
+publish_records
 console_users
 auth_sessions
 drafts
@@ -239,6 +245,10 @@ draft_images
 
 - 账号密码登录、退出、session 鉴权
 - 项目管理增删改查
+- 新建项目自动生成默认渠道二维码（写入 `property_channels`）
+- 素材/标签/卖点/概览/策略按项目 `property_id` 隔离（顶栏切换项目,前端 `X-Project-Id` 头,后端 `requireConsoleProject`）
+- 扫码公开预览:`/p/<项目id>` 中间页 → 小程序按 projectId 拉「随机 5 张图 + AI 文案」(可换一批;文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底)
+- 发布存档:小程序确认发布写 `publish_records`（只存 material_ids 引用 + 文案 + 发布人/渠道,不复制图片字节）
 - 用户管理增删改查
 - 图片上传入库，原图存入 `material_files`
 - 上传图片的类型、平台、营销阶段写入 `materials`
@@ -254,10 +264,10 @@ draft_images
 
 高优先级：
 
-- 后台还没有“从素材生成草稿/二维码”的完整入口
-- 小程序真实发布能力未接入，`xhs-miniprogram/utils/xhsPublish.js` 仍是适配器占位
+- 「从素材生成内容」已改为扫码公开预览(随机取图 + AI 文案),但后台还没有「发布记录查看 / 渠道增删改」的管理界面
+- 小程序已接入预览接口 + 发布存档,但「真正写入小红书草稿页」仍未接入(`xhs-miniprogram/utils/xhsPublish.js` 是占位);小程序改动需在小红书/微信 IDE 里自测
 - `/materials/upload-video` 仍是占位页
-- 项目渠道二维码只读取 `property_channels`，没有管理入口，也不会在创建项目时自动生成
+- 项目渠道二维码读取 `property_channels`；新建项目时会自动生成一条默认渠道，但仍没有后续增删改渠道的管理入口
 
 中优先级：
 
@@ -459,6 +469,15 @@ AUTH_COOKIE_SECURE="true"
 ```
 
 正式 HTTPS 环境保持 `true`；临时 HTTP 直连 3000 测试可短暂设为 `false`，改完后需要 `pm2 restart content-publisher-console --update-env`。测试完成后应改回 `true`，并优先通过 Nginx HTTPS 访问。
+
+### 新建项目的二维码链接域名
+
+新建项目时会在 `property_channels` 自动插入一条「默认渠道」。二维码 / NFC 指向**公开扫码中间页** `<base>/p/<项目id>`(用户扫码 → 选平台 → 跳小程序;由 `buildProjectScanUrl` 生成),`<base>` 的来源优先级:
+
+1. `APP_BASE_URL` 环境变量（推荐，例如 `https://your-domain.com`；运行时读取，改了只需 `pm2 restart content-publisher-console --update-env`，不用 rebuild）
+2. 未配置时回退到请求来源域名（Nginx 反代下取 `X-Forwarded-Host` / `X-Forwarded-Proto`，否则 `Host`）
+
+相关代码:`propertyDetailUrl.ts`(`buildProjectScanUrl`)、`consoleRepository.createProperty`、公开页 `src/app/p/[projectId]/page.tsx` + `ProjectPreviewBridge`。已有项目不会自动补渠道,需要时用 SQL 手动插入。
 
 ## 给后续 AI 的建议
 

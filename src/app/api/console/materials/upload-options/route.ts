@@ -1,9 +1,9 @@
 import { getMaterialUploadOptions } from "@/server/console/consoleService";
-import { requireConsoleUser } from "@/server/auth/guard";
+import { requireConsoleProject } from "@/server/auth/guard";
 
-export async function GET() {
-  const auth = await requireConsoleUser();
-  if (auth.response) return auth.response;
+export async function GET(request: Request) {
+  const ctx = await requireConsoleProject(request);
+  if (ctx.response) return ctx.response;
 
-  return Response.json(await getMaterialUploadOptions());
+  return Response.json(await getMaterialUploadOptions(ctx.propertyId));
 }

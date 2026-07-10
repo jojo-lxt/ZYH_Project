@@ -1,4 +1,4 @@
-import { requireConsoleUser } from "@/server/auth/guard";
+import { requireConsoleProject } from "@/server/auth/guard";
 import {
   deleteConsoleConfigItem,
   updateConsoleConfigItem,
@@ -9,12 +9,12 @@ export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireConsoleUser();
-  if (auth.response) return auth.response;
+  const ctx = await requireConsoleProject(request);
+  if (ctx.response) return ctx.response;
 
   const { id } = await context.params;
   try {
-    await updateConsoleConfigItem(id, await request.json());
+    await updateConsoleConfigItem(id, ctx.propertyId, await request.json());
 
     return Response.json({ ok: true });
   } catch (error) {
@@ -23,16 +23,16 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireConsoleUser();
-  if (auth.response) return auth.response;
+  const ctx = await requireConsoleProject(request);
+  if (ctx.response) return ctx.response;
 
   const { id } = await context.params;
 
   try {
-    return Response.json({ deleted: await deleteConsoleConfigItem(id) });
+    return Response.json({ deleted: await deleteConsoleConfigItem(id, ctx.propertyId) });
   } catch (error) {
     return jsonError(error, "标签删除失败");
   }

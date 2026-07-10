@@ -11,6 +11,8 @@ import {
   useUpdateMaterialMutation,
   useUpdateMaterialTagsMutation,
 } from "@/store/consoleApi";
+import { selectConsoleCurrentProject } from "@/store/consoleSlice";
+import { useAppSelector } from "@/store/hooks";
 import type { ConfigTreeItem, MaterialItem } from "@/shared/types/console";
 
 type MaterialTagKind = "attribute" | "selling";
@@ -696,9 +698,10 @@ function FilterRail({
 
 export function MaterialsPage() {
   const { message } = App.useApp();
-  const { data: materialsData, refetch: refetchMaterials } = useGetMaterialsQuery();
-  const { data: sellingConfigData } = useGetSellingPointConfigQuery();
-  const { data: tagConfigData } = useGetTagConfigQuery();
+  const currentProject = useAppSelector(selectConsoleCurrentProject);
+  const { data: materialsData, refetch: refetchMaterials } = useGetMaterialsQuery(currentProject, { skip: !currentProject });
+  const { data: sellingConfigData } = useGetSellingPointConfigQuery(currentProject, { skip: !currentProject });
+  const { data: tagConfigData } = useGetTagConfigQuery(currentProject, { skip: !currentProject });
   const [deleteMaterialsMutation] = useDeleteMaterialsMutation();
   const [updateMaterial] = useUpdateMaterialMutation();
   const [updateMaterialTags] = useUpdateMaterialTagsMutation();

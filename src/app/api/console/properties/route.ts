@@ -1,4 +1,5 @@
 import { createConsoleProperty, getConsoleProperties } from "@/server/console/consoleService";
+import { resolveDetailBaseUrl } from "@/server/console/propertyDetailUrl";
 import { requireConsoleUser } from "@/server/auth/guard";
 import { jsonError } from "@/server/http";
 
@@ -14,7 +15,10 @@ export async function POST(request: Request) {
   if (auth.response) return auth.response;
 
   try {
-    return Response.json({ property: await createConsoleProperty(await request.json()) });
+    const detailBaseUrl = resolveDetailBaseUrl(request);
+    return Response.json({
+      property: await createConsoleProperty(await request.json(), detailBaseUrl),
+    });
   } catch (error) {
     return jsonError(error, "项目创建失败");
   }

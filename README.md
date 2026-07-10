@@ -123,6 +123,9 @@ GET  /api/drafts/[id]/images/[filename]
 - 修改 Next.js 路由、Route Handler 或配置前，先读 `node_modules/next/dist/docs/` 中的对应文档。项目根目录的 `AGENTS.md` 明确要求不要按旧版 Next.js 经验直接改。
 - 腾讯云 Ubuntu 镜像默认使用 `ubuntu` 用户登录，服务器部署路径按 `/home/ubuntu/content-publisher-console` 维护；不要直接把 SSH 用户名改成未创建的其他用户。
 - 登录 session cookie 默认在生产环境使用 `Secure`。正式部署应走 HTTPS；临时用 `http://<服务器公网IP>:3000` 测试登录时，可短暂设置 `AUTH_COOKIE_SECURE="false"` 并重启 PM2。
+- 新建项目会自动生成一条默认渠道，其二维码 / NFC 指向公开扫码中间页 `/p/<项目id>`（扫码 → 选平台 → 跳小程序）；链接域名取自 `APP_BASE_URL`（运行时读取，未配置则回退请求来源域名），渠道数据存于 `property_channels` 表。
+- 素材/标签/卖点/概览/策略按项目隔离（顶栏切换项目，前端经 `X-Project-Id` 头传当前项目 id，后端 `requireConsoleProject` 校验）。
+- 公开接口 `GET /api/public/projects/[id]/preview` 供扫码中间页 / 小程序拉「随机 5 张图 + AI 文案」，再调一次即刷新换一批；文案走 OpenAI 兼容的国内大模型（`LLM_*` 环境变量），未配置或失败则用卖点/标签拼兜底文案。
 - 视觉主题主要集中在 `src/app/providers.tsx`、`src/app/globals.css` 和 `src/features/console/overview/OverviewDashboard.tsx` 的 ECharts 配色中，后续新增页面应沿用这套主题。
 - `src/shared/mock/consoleData.ts` 仍保留作为早期 mock/兜底数据，不代表当前主要数据来源。
 - 小程序发布能力依赖平台官方开放能力和审核权限，普通 H5 无法绕过平台限制直接写入真实小红书草稿页。

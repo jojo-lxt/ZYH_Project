@@ -5,6 +5,8 @@ import { App, Button, DatePicker, Select, Space, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { EChartsOption } from "echarts";
 import { useGetOverviewQuery, useGetStrategyQuery } from "@/store/consoleApi";
+import { selectConsoleCurrentProject } from "@/store/consoleSlice";
+import { useAppSelector } from "@/store/hooks";
 import type {
   ConsoleContentType,
   ConsoleOverviewQuery,
@@ -685,8 +687,15 @@ export function OverviewDashboard() {
     platform: channelType,
     ...getRangeQuery(dateRange),
   }), [channelType, dateRange, noteType]);
-  const { data: overviewData = emptyOverviewData } = useGetOverviewQuery(overviewQuery);
-  const { data: strategyData = emptyStrategyData } = useGetStrategyQuery(strategyQuery);
+  const currentProject = useAppSelector(selectConsoleCurrentProject);
+  const { data: overviewData = emptyOverviewData } = useGetOverviewQuery(
+    { ...overviewQuery, projectId: currentProject },
+    { skip: !currentProject },
+  );
+  const { data: strategyData = emptyStrategyData } = useGetStrategyQuery(
+    { ...strategyQuery, projectId: currentProject },
+    { skip: !currentProject },
+  );
 
   return (
     <section className="console-page">

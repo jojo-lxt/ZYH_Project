@@ -1,5 +1,5 @@
 <view class="page">
-  <view xhs:if="{{loading}}" class="state-card">正在加载草稿...</view>
+  <view xhs:if="{{loading}}" class="state-card">正在加载素材...</view>
   <view xhs:elif="{{error}}" class="state-card error">{{error}}</view>
 
   <block xhs:else>
@@ -21,7 +21,10 @@
 
     <view class="result-head">
       <text>生成结果预览</text>
-      <button bindtap="copyCaption" size="mini">复制</button>
+      <view>
+        <button bindtap="refreshPreview" size="mini" loading="{{refreshing}}">换一批</button>
+        <button bindtap="copyCaption" size="mini">复制</button>
+      </view>
     </view>
 
     <view class="caption-card">

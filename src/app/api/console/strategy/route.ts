@@ -1,5 +1,5 @@
 import { getConsoleStrategy } from "@/server/console/consoleService";
-import { requireConsoleUser } from "@/server/auth/guard";
+import { requireConsoleProject } from "@/server/auth/guard";
 import type {
   ConsoleContentType,
   ConsolePlatform,
@@ -22,8 +22,8 @@ function getStrategyQuery(request: Request): ConsoleStrategyQuery {
 }
 
 export async function GET(request: Request) {
-  const auth = await requireConsoleUser();
-  if (auth.response) return auth.response;
+  const ctx = await requireConsoleProject(request);
+  if (ctx.response) return ctx.response;
 
-  return Response.json(await getConsoleStrategy(getStrategyQuery(request)));
+  return Response.json(await getConsoleStrategy(ctx.propertyId, getStrategyQuery(request)));
 }

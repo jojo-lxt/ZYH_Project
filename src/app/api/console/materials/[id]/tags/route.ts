@@ -1,4 +1,4 @@
-import { requireConsoleUser } from "@/server/auth/guard";
+import { requireConsoleProject } from "@/server/auth/guard";
 import { setConsoleMaterialTags } from "@/server/console/consoleService";
 import { jsonError } from "@/server/http";
 
@@ -6,8 +6,8 @@ export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireConsoleUser();
-  if (auth.response) return auth.response;
+  const ctx = await requireConsoleProject(request);
+  if (ctx.response) return ctx.response;
 
   const { id } = await context.params;
   const body = await request.json();
@@ -15,7 +15,7 @@ export async function PUT(
   const tags = Array.isArray(body.tags) ? body.tags.map(String).filter(Boolean) : [];
 
   try {
-    await setConsoleMaterialTags(Number(id), kind, tags);
+    await setConsoleMaterialTags(Number(id), ctx.propertyId, kind, tags);
 
     return Response.json({ ok: true });
   } catch (error) {

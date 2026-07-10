@@ -4,7 +4,6 @@ const {
   setClipboardData,
   showToast,
 } = require("../../utils/platform");
-const { getMockDraft } = require("../../utils/mockDraft");
 const { openXhsDraftPublisher } = require("../../utils/xhsPublish");
 
 function trimSlash(value) {
@@ -23,86 +22,116 @@ function normalizeUrl(url, baseUrl) {
   return `${trimSlash(baseUrl)}${url}`;
 }
 
-function getDraftApiUrl(options) {
-  if (options.apiUrl) {
-    return decodeURIComponent(options.apiUrl);
-  }
+// 中间页跳转时会带上 projectId + apiUrl(= /api/public/projects/<id>/preview)。
+function getPreviewContext(options) {
+  const projectId = options.projectId || options.id || "";
+  const apiUrl = options.apiUrl
+    ? decodeURIComponent(options.apiUrl)
+    : projectId
+      ? `${trimSlash(API_BASE_URL)}/api/public/projects/${projectId}/preview`
+      : "";
+  // 从预览地址推出接口根域名(用于拼图片绝对地址 + 发布接口)。
+  const apiBaseUrl = apiUrl.replace(/\/api\/public\/projects\/.*/, "");
 
-  const draftId = options.draftId || options.id;
-
-  if (!draftId) {
-    return "";
-  }
-
-  return `${trimSlash(API_BASE_URL)}/api/drafts/${draftId}`;
+  return { apiBaseUrl, apiUrl, projectId };
 }
 
-function withDisplayImageUrls(draft, apiBaseUrl = "") {
-  const addAbsoluteUrl = (image) => ({
+// 把「随机图 + AI 文案」预览响应适配成模板用的 draft 结构。
+function toDraft(payload, apiBaseUrl) {
+  const caption = payload.caption || {};
+  const images = (payload.images || []).map((image) => ({
     ...image,
     absoluteUrl: normalizeUrl(image.url, apiBaseUrl),
-  });
+  }));
+  const title = caption.title || "";
+  const body = caption.body || "";
+  const topics = Array.isArray(caption.topics) ? caption.topics : [];
 
   return {
-    ...draft,
-    images: draft.images.map(addAbsoluteUrl),
-    selectedImages: draft.selectedImages.map(addAbsoluteUrl),
+    body,
+    caption: [title, body].filter(Boolean).join("\n\n"),
+    images,
+    materialIds: images.map((image) => image.id),
+    projectName: payload.projectName || "",
+    selectedImages: images,
+    tags: topics,
+    title,
+    topics,
   };
 }
 
 Page({
   data: {
+    apiBaseUrl: "",
+    apiUrl: "",
     currentImage: null,
     currentImageIndex: 0,
     draft: null,
     error: "",
     loading: true,
+    projectId: "",
     publishing: false,
+    refreshing: false,
   },
 
   onLoad(options) {
-    this.loadDraft(options);
+    const context = getPreviewContext(options);
+
+    this.setData({
+      apiBaseUrl: context.apiBaseUrl,
+      apiUrl: context.apiUrl,
+      projectId: context.projectId,
+    });
+    this.loadPreview();
   },
 
-  async loadDraft(options) {
-    const apiUrl = getDraftApiUrl(options);
-
-    if (!apiUrl) {
-      this.showDraft(getMockDraft());
+  async loadPreview(isRefresh) {
+    if (!this.data.apiUrl) {
+      this.setData({ error: "缺少项目参数", loading: false });
       return;
     }
+
+    this.setData(isRefresh ? { refreshing: true } : { loading: true });
 
     try {
       const response = await request({
         method: "GET",
-        url: apiUrl,
+        url: this.data.apiUrl,
       });
       const payload = response.data || {};
 
-      if (!payload.draft) {
-        throw new Error(payload.error || "草稿不存在");
+      if (!payload.images) {
+        throw new Error(payload.error || "项目不存在");
       }
 
-      const apiBaseUrl = apiUrl.replace(/\/api\/drafts\/[^/]+$/, "");
-      this.showDraft(payload.draft, apiBaseUrl);
+      this.showDraft(toDraft(payload, this.data.apiBaseUrl));
     } catch (error) {
       this.setData({
-        error: error.message || "加载草稿失败",
+        error: error.message || "加载失败",
         loading: false,
+        refreshing: false,
       });
     }
   },
 
-  showDraft(rawDraft, apiBaseUrl = "") {
-    const draft = withDisplayImageUrls(rawDraft, apiBaseUrl);
-
+  showDraft(draft) {
     this.setData({
       currentImage: draft.selectedImages[0] || null,
       currentImageIndex: 0,
       draft,
       error: "",
       loading: false,
+      refreshing: false,
     });
+  },
+
+  // 换一批:重新拉预览,后端随机取新的一组图 + 生成新文案。
+  refreshPreview() {
+    if (this.data.refreshing || this.data.loading) {
+      return;
+    }
+
+    this.loadPreview(true);
   },
 
   selectImage(event) {
@@ -130,14 +159,32 @@ Page({
   },
 
   async openPublisher() {
-    if (!this.data.draft) {
+    const draft = this.data.draft;
+
+    if (!draft) {
       return;
     }
 
     this.setData({ publishing: true });
 
     try {
-      await openXhsDraftPublisher(this.data.draft);
+      // 先把这一组存成发布记录(只存 material_ids 引用 + 文案),再打开小红书发布页。
+      if (this.data.apiBaseUrl && this.data.projectId) {
+        await request({
+          data: {
+            body: draft.body,
+            channel: "xhs",
+            materialIds: draft.materialIds,
+            publisher: "",
+            title: draft.title,
+            topics: draft.topics,
+          },
+          method: "POST",
+          url: `${trimSlash(this.data.apiBaseUrl)}/api/public/projects/${this.data.projectId}/publish`,
+        });
+      }
+
+      await openXhsDraftPublisher(draft);
     } catch (error) {
       showToast(error.message || "打开发布页失败");
     } finally {

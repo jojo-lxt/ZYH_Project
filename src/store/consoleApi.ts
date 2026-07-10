@@ -1,4 +1,6 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
+import { selectConsoleCurrentProject } from "@/store/consoleSlice";
+import type { RootState } from "@/store/store";
 import type {
   ConsoleConfigResponse,
   ConsoleOverviewQuery,
@@ -35,7 +37,17 @@ function toSearchParams(params?: ConsoleOverviewQuery | ConsoleStrategyQuery | v
 }
 
 export const consoleApi = createApi({
-  baseQuery: fetchBaseQuery({ baseUrl: "/api/console" }),
+  baseQuery: fetchBaseQuery({
+    baseUrl: "/api/console",
+    // 把当前选中的项目 id 通过 X-Project-Id 头带给后端,用于按项目隔离数据。
+    prepareHeaders: (headers, { getState }) => {
+      const projectId = selectConsoleCurrentProject(getState() as RootState);
+      if (projectId) {
+        headers.set("X-Project-Id", projectId);
+      }
+      return headers;
+    },
+  }),
   endpoints: (builder) => ({
     createConfigItem: builder.mutation<
       { id: string },
@@ -114,15 +126,15 @@ export const consoleApi = createApi({
         url: `/users/${encodeURIComponent(id)}`,
       }),
     }),
-    getMaterialUploadOptions: builder.query<MaterialUploadResponse, void>({
+    getMaterialUploadOptions: builder.query<MaterialUploadResponse, string>({
       providesTags: ["UploadOptions"],
       query: () => "/materials/upload-options",
     }),
-    getMaterials: builder.query<{ filterGroups: string[]; materials: MaterialItem[]; total: number }, void>({
+    getMaterials: builder.query<{ filterGroups: string[]; materials: MaterialItem[]; total: number }, string>({
       providesTags: ["Materials"],
       query: () => "/materials",
     }),
-    getOverview: builder.query<ConsoleOverviewResponse, ConsoleOverviewQuery | void>({
+    getOverview: builder.query<ConsoleOverviewResponse, ConsoleOverviewQuery & { projectId: string }>({
       providesTags: ["Overview"],
       query: (params) => `/overview${toSearchParams(params)}`,
     }),
@@ -134,15 +146,15 @@ export const consoleApi = createApi({
       providesTags: (_result, _error, id) => [{ id, type: "PropertyDetail" }],
       query: (id) => `/properties/${id}`,
     }),
-    getSellingPointConfig: builder.query<ConsoleConfigResponse, void>({
+    getSellingPointConfig: builder.query<ConsoleConfigResponse, string>({
       providesTags: ["SellingConfig"],
       query: () => "/config/selling-points",
     }),
-    getStrategy: builder.query<ConsoleStrategyResponse, ConsoleStrategyQuery | void>({
+    getStrategy: builder.query<ConsoleStrategyResponse, ConsoleStrategyQuery & { projectId: string }>({
       providesTags: ["Strategy"],
       query: (params) => `/strategy${toSearchParams(params)}`,
     }),
-    getTagConfig: builder.query<ConsoleConfigResponse, void>({
+    getTagConfig: builder.query<ConsoleConfigResponse, string>({
       providesTags: ["TagConfig"],
       query: () => "/config/tags",
     }),
