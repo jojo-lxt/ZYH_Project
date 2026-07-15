@@ -28,6 +28,7 @@ import {
 } from "@/store/consoleSlice";
 import { useGetPropertiesQuery } from "@/store/consoleApi";
 import type { AuthUser } from "@/shared/types/auth";
+import { CurrentUserProvider } from "@/features/console/components/CurrentUserContext";
 
 type ConsoleShellProps = {
   children: ReactNode;
@@ -144,23 +145,28 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
       key: "module",
       label: "模块管理",
     },
-    {
-      children: [
-        {
-          icon: <ProjectOutlined />,
-          key: "properties",
-          label: <Link href="/properties">项目管理</Link>,
-        },
-        {
-          icon: <TeamOutlined />,
-          key: "users",
-          label: <Link href="/users">用户管理</Link>,
-        },
-      ],
-      icon: <FolderOpenOutlined />,
-      key: "config",
-      label: "功能配置",
-    },
+    // 员工只有工作区(概览 + 图片素材);项目管理 / 用户管理仅超管+管理员可见。
+    ...(currentUser.role === "员工"
+      ? []
+      : [
+          {
+            children: [
+              {
+                icon: <ProjectOutlined />,
+                key: "properties",
+                label: <Link href="/properties">项目管理</Link>,
+              },
+              {
+                icon: <TeamOutlined />,
+                key: "users",
+                label: <Link href="/users">用户管理</Link>,
+              },
+            ],
+            icon: <FolderOpenOutlined />,
+            key: "config",
+            label: "功能配置",
+          },
+        ]),
   ];
 
   const topItems: MenuProps["items"] = topActions.map((item) => ({
@@ -170,16 +176,6 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
   }));
 
   const userItems: MenuProps["items"] = [
-    {
-      icon: <UserOutlined />,
-      key: "profile",
-      label: "个人资料",
-    },
-    {
-      icon: <DatabaseOutlined />,
-      key: "project",
-      label: "切换项目",
-    },
     {
       danger: true,
       icon: <LogoutOutlined />,
@@ -251,7 +247,9 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
           </Dropdown>
         </Header>
 
-        <Content className="console-content">{children}</Content>
+        <Content className="console-content">
+          <CurrentUserProvider user={currentUser}>{children}</CurrentUserProvider>
+        </Content>
       </Layout>
     </Layout>
   );

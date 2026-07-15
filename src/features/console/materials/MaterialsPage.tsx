@@ -14,6 +14,7 @@ import {
 import { selectConsoleCurrentProject } from "@/store/consoleSlice";
 import { useAppSelector } from "@/store/hooks";
 import type { ConfigTreeItem, MaterialItem } from "@/shared/types/console";
+import { MARKETING_STAGES } from "@/features/console/shared/marketingStages";
 
 type MaterialTagKind = "attribute" | "selling";
 
@@ -52,20 +53,6 @@ const materialCategoryOptions = ["内页图", "海报首图"];
 const materialPlatformOptions = ["小红书", "微信"];
 const emptyConfigTree: ConfigTreeItem[] = [];
 const emptyMaterials: MaterialItem[] = [];
-const materialStageOptions = [
-  "交付和口碑期",
-  "亮相开放前",
-  "现房在售期",
-  "诚意登记期",
-  "专项营销活动",
-  "尾盘与清盘期",
-  "横沔和泗青公园专题笔记",
-  "张江金茂府品质交付",
-  "区域价值",
-  "配套价值",
-  "产品力价值",
-  "地段价值",
-];
 
 function getMaterialFileSize(item: MaterialItem) {
   if (item.fileSizeBytes <= 0) {
@@ -427,7 +414,7 @@ function MaterialTypeConfigModal({
             <Select
               allowClear
               showSearch
-              options={materialStageOptions.map((value) => ({ label: value, value }))}
+              options={MARKETING_STAGES.map((value) => ({ label: value, value }))}
               placeholder="请选择营销阶段"
               value={config.stage}
               onChange={(stage) => onChange({ ...config, stage: stage ?? "" })}
@@ -740,7 +727,7 @@ export function MaterialsPage() {
     [materials],
   );
   const stageOptions = useMemo(
-    () => Array.from(new Set([...materials.map((item) => item.stage), ...materialStageOptions])),
+    () => Array.from(new Set([...materials.map((item) => item.stage), ...MARKETING_STAGES])),
     [materials],
   );
 

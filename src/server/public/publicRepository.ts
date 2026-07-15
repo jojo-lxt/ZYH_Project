@@ -1,5 +1,6 @@
 import "server-only";
 import { queryOne, queryRows } from "@/server/db";
+import type { XhsCaption } from "@/server/ai/caption";
 
 type PublicMaterialFileRow = {
   bytes: Buffer;
@@ -47,6 +48,19 @@ export async function getProjectConfigNames(projectId: string) {
     sellingPoints: rows.filter((row) => row.config_type === "selling_point").map((row) => row.name),
     tags: rows.filter((row) => row.config_type === "tag").map((row) => row.name),
   };
+}
+
+// 该项目的文案风格档案(风格 spec + 认可范例),注入 AI 生成让文案风格稳定。无档案返回 null。
+export async function getCaptionProfile(
+  projectId: string,
+): Promise<{ styleSpec: string; examples: XhsCaption[] } | null> {
+  const row = await queryOne<{ style_spec: string; examples: unknown }>(
+    "SELECT style_spec, examples FROM caption_profiles WHERE property_id = $1 LIMIT 1",
+    [projectId],
+  );
+  if (!row) return null;
+  const examples = Array.isArray(row.examples) ? (row.examples as XhsCaption[]) : [];
+  return { styleSpec: row.style_spec ?? "", examples };
 }
 
 // 公开图片:按 (项目, 素材) 取字节,JOIN materials 确保素材属于该项目,防止跨项目取图。

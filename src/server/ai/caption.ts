@@ -14,6 +14,9 @@ export type CaptionInput = {
   projectName: string;
   sellingPoints: string[];
   tags: string[];
+  // 每项目的文案风格档案:注入后让文案「风格稳定、内容有变化」。缺省时行为与原来一致。
+  styleSpec?: string;
+  examples?: XhsCaption[];
 };
 
 function trimTrailingSlashes(value: string) {
@@ -43,11 +46,27 @@ function fallbackCaption(input: CaptionInput): XhsCaption {
 }
 
 function buildMessages(input: CaptionInput) {
+  // 风格档案:有则注入,约束语气/结构;few-shot 范例是稳定风格最强的杠杆。
+  const styleBlock = input.styleSpec?.trim()
+    ? `\n\n本项目文案风格规范(务必遵循):\n${input.styleSpec.trim()}`
+    : "";
+  const exampleBlock = input.examples?.length
+    ? "\n\n以下是本项目已认可的范例,请严格模仿其语气/结构/话题风格,但不要照抄内容:\n" +
+      input.examples
+        .slice(0, 4)
+        .map(
+          (example, index) =>
+            `范例${index + 1} 标题:${example.title}\n正文:${example.body}\n话题:${(example.topics ?? []).join("、")}`,
+        )
+        .join("\n---\n")
+    : "";
   const system =
     "你是资深小红书房产种草文案写手。用口语化、有网感、带 emoji 的风格,为地产项目写一篇简短笔记。" +
     "只输出 JSON,不要额外解释或代码块围栏。JSON 字段:" +
     "title(不超过 20 字的标题)、body(正文,150 字以内,可含换行和 emoji)、" +
-    "topics(3-6 个话题词字符串数组,不带 # 号)。";
+    "topics(3-6 个话题词字符串数组,不带 # 号)。" +
+    styleBlock +
+    exampleBlock;
   const user = [
     `项目名称:${input.projectName || "未命名项目"}`,
     input.sellingPoints.length ? `卖点:${dedupeNonEmpty(input.sellingPoints).join("、")}` : "卖点:暂无",
@@ -111,7 +130,7 @@ export async function generateXhsCaption(input: CaptionInput): Promise<XhsCaptio
         messages: buildMessages(input),
         model,
         response_format: { type: "json_object" },
-        temperature: 0.9,
+        temperature: 0.5,
       }),
       headers: {
         Authorization: `Bearer ${apiKey}`,

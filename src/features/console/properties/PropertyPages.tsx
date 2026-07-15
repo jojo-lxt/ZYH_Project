@@ -31,11 +31,19 @@ import {
   useUpdatePropertyMutation,
   useUpdateUserMutation,
 } from "@/store/consoleApi";
+import { MARKETING_STAGES } from "@/features/console/shared/marketingStages";
+import { useCurrentUser } from "@/features/console/components/CurrentUserContext";
 
 type PropertyDraft = Omit<PropertyRow, "createdAt" | "key">;
 
-type UserDraft = Omit<UserRow, "createdAt" | "key"> & {
+type UserDraft = {
+  name: string;
+  phone: string;
   password: string;
+  role: string;
+  status: string;
+  managerId?: string;
+  projectIds: string[];
 };
 
 const emptyPropertyDraft: PropertyDraft = {
@@ -53,8 +61,9 @@ const emptyUserDraft: UserDraft = {
   name: "",
   password: "",
   phone: "",
-  role: "游客",
+  role: "员工",
   status: "active",
+  projectIds: [],
 };
 
 function getApiErrorMessage(error: unknown, fallback: string) {
@@ -79,7 +88,7 @@ function PropertyPage({ onDetail }: { onDetail: (id: string) => void }) {
 
   const stageOptions = useMemo(
     () =>
-      Array.from(new Set([...properties.map((property) => property.stage), "现房在售", "交付和口碑期", "强销期"]))
+      Array.from(new Set([...properties.map((property) => property.stage), ...MARKETING_STAGES]))
         .filter(Boolean)
         .map((value) => ({ label: value, value })),
     [properties],
@@ -391,6 +400,33 @@ function UsersPage() {
   const [phoneQuery, setPhoneQuery] = useState("");
   const [sortDesc, setSortDesc] = useState(true);
 
+  const me = useCurrentUser();
+  const isSuper = me.role === "超级管理员";
+  const { data: propertiesData } = useGetPropertiesQuery();
+
+  // 超管可建管理员/员工;管理员只能建员工(锁死)。
+  const roleOptions = isSuper
+    ? [
+        { label: "管理员", value: "管理员" },
+        { label: "员工", value: "员工" },
+      ]
+    : [{ label: "员工", value: "员工" }];
+
+  // 超管建员工时选「所属管理员」:从用户列表里筛出角色为管理员的账号。
+  const managerOptions = useMemo(
+    () => users.filter((u) => u.role === "管理员").map((u) => ({ label: u.name, value: u.key })),
+    [users],
+  );
+
+  // 可访问项目:超管按所选管理员的 ownerId 过滤;管理员用自己的全部项目(getProperties 已只返回自己的)。
+  const assignableProjects = useMemo(
+    () =>
+      (propertiesData?.properties ?? [])
+        .filter((p) => (isSuper ? p.ownerId === draft.managerId : true))
+        .map((p) => ({ label: p.name, value: p.key })),
+    [propertiesData, isSuper, draft.managerId],
+  );
+
   const filteredUsers = useMemo(() => {
     const list = users.filter((user) => {
       const matchPhone = !phoneQuery.trim() || user.phone.includes(phoneQuery.trim());
@@ -419,6 +455,8 @@ function UsersPage() {
       phone: user.phone,
       role: user.role,
       status: user.status ?? "active",
+      managerId: user.managerId ?? undefined,
+      projectIds: user.projectKeys ?? [],
     });
     setIsModalOpen(true);
   }
@@ -444,6 +482,22 @@ function UsersPage() {
       return;
     }
 
+    if (draft.role === "员工") {
+      if (isSuper && !draft.managerId) {
+        message.warning("请为员工选择所属管理员");
+        return;
+      }
+      if (draft.projectIds.length === 0) {
+        message.warning("请至少为员工分配 1 个项目");
+        return;
+      }
+    }
+
+    const staffFields =
+      draft.role === "员工"
+        ? { managerId: isSuper ? draft.managerId : undefined, projectIds: draft.projectIds }
+        : {};
+
     try {
       if (editingKey) {
         await updateUser({
@@ -453,6 +507,7 @@ function UsersPage() {
           phone: draft.phone,
           role: draft.role,
           status: draft.status,
+          ...staffFields,
         }).unwrap();
       } else {
         await createUser({
@@ -460,6 +515,7 @@ function UsersPage() {
           password: draft.password,
           phone: draft.phone,
           role: draft.role,
+          ...staffFields,
         }).unwrap();
       }
 
@@ -505,8 +561,14 @@ function UsersPage() {
       dataIndex: "role",
       title: "角色",
       render: (role: string) => (
-        <Tag color={role === "管理员" ? "success" : "processing"}>{role}</Tag>
+        <Tag color={role === "超级管理员" ? "gold" : role === "管理员" ? "success" : "processing"}>{role}</Tag>
       ),
+    },
+    { dataIndex: "managerName", title: "所属管理员", render: (value: string | null) => value || "-" },
+    {
+      dataIndex: "projectNames",
+      title: "可访问项目",
+      render: (names: string[] = []) => (names.length ? names.join("、") : "-"),
     },
     {
       dataIndex: "status",
@@ -647,14 +709,35 @@ function UsersPage() {
           <label>
             <span>角色</span>
             <Select
+              disabled={!isSuper}
               onChange={(value) => setDraft((current) => ({ ...current, role: value }))}
-              options={[
-                { label: "管理员", value: "管理员" },
-                { label: "游客", value: "游客" },
-              ]}
+              options={roleOptions}
               value={draft.role}
             />
           </label>
+          {isSuper && draft.role === "员工" ? (
+            <label>
+              <span>所属管理员</span>
+              <Select
+                onChange={(value) => setDraft((current) => ({ ...current, managerId: value, projectIds: [] }))}
+                options={managerOptions}
+                placeholder="选择该员工归属的管理员"
+                value={draft.managerId}
+              />
+            </label>
+          ) : null}
+          {draft.role === "员工" ? (
+            <label>
+              <span>可访问项目</span>
+              <Select
+                mode="multiple"
+                onChange={(value) => setDraft((current) => ({ ...current, projectIds: value }))}
+                options={assignableProjects}
+                placeholder={isSuper && !draft.managerId ? "请先选择所属管理员" : "至少选择 1 个项目"}
+                value={draft.projectIds}
+              />
+            </label>
+          ) : null}
           <label>
             <span>状态</span>
             <Select

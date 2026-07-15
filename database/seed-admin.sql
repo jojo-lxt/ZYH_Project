@@ -3,7 +3,7 @@ VALUES (
            'admin-' || :'admin_phone',
            :'admin_name',
            :'admin_phone',
-           '管理员',
+           '超级管理员',
            :'admin_password_hash',
            'active'
        )

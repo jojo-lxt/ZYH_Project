@@ -2,6 +2,7 @@ import "server-only";
 import { generateXhsCaption, type XhsCaption } from "@/server/ai/caption";
 import {
   createPublishRecord,
+  getCaptionProfile,
   getProjectConfigNames,
   getProjectName,
   getRandomMaterialIds,
@@ -22,15 +23,18 @@ export async function getProjectPreview(projectId: string, count: number): Promi
     return null;
   }
 
-  const [materialIds, config] = await Promise.all([
+  const [materialIds, config, profile] = await Promise.all([
     getRandomMaterialIds(projectId, count),
     getProjectConfigNames(projectId),
+    getCaptionProfile(projectId),
   ]);
 
   const caption = await generateXhsCaption({
     projectName,
     sellingPoints: config.sellingPoints,
     tags: config.tags,
+    styleSpec: profile?.styleSpec,
+    examples: profile?.examples,
   });
 
   return {

@@ -14,6 +14,10 @@ export async function POST(request: Request) {
   const auth = await requireConsoleUser();
   if (auth.response) return auth.response;
 
+  if (auth.user.role === "员工") {
+    return Response.json({ error: "无权新建项目" }, { status: 403 });
+  }
+
   try {
     const detailBaseUrl = resolveDetailBaseUrl(request);
     return Response.json({

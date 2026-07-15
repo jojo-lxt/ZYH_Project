@@ -84,6 +84,8 @@ export const consoleApi = createApi({
         password: string;
         phone: string;
         role: string;
+        managerId?: string;
+        projectIds?: string[];
       }
     >({
       invalidatesTags: ["Users"],
@@ -225,7 +227,16 @@ export const consoleApi = createApi({
     }),
     updateUser: builder.mutation<
       { user: UserRow },
-      Partial<Omit<UserRow, "createdAt" | "key">> & { id: string; password?: string }
+      {
+        id: string;
+        name?: string;
+        phone?: string;
+        password?: string;
+        role?: string;
+        status?: string;
+        managerId?: string;
+        projectIds?: string[];
+      }
     >({
       invalidatesTags: ["Users"],
       query: ({ id, ...body }) => ({

@@ -66,6 +66,8 @@ export type PropertyRow = {
   stage: string;
   address: string;
   createdAt: string;
+  ownerId?: string;
+  ownerName?: string;
 };
 
 export type UserRow = {
@@ -75,6 +77,10 @@ export type UserRow = {
   role: string;
   status?: string;
   createdAt: string;
+  managerId?: string | null;
+  managerName?: string | null;
+  projectKeys?: string[];
+  projectNames?: string[];
 };
 
 export type ConfigGroup = {

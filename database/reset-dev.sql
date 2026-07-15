@@ -1,15 +1,20 @@
--- 开发阶段整库重置:清空所有数据,只保留由 schema.sql 重建的结构。
--- 生产环境请勿运行 —— 会删除全部数据。
+-- 开发阶段整库重置:删掉所有表,再由 schema.sql 按当前结构重建。
+-- 生产环境请勿运行 —— 会删除全部数据与结构。
+--
+-- 为什么用 DROP 而不是 TRUNCATE:schema.sql 现在是「全新库的权威定义」(纯 CREATE TABLE IF NOT EXISTS,
+-- 不再自带 ALTER 迁移)。若只 TRUNCATE 保留旧表结构,再跑 schema.sql 会因 IF NOT EXISTS 跳过、结构不更新。
+-- 所以开发重置先 DROP、再由 schema.sql 重建,保证结构永远与 schema.sql 一致。
+-- (只想清数据、保留现有结构时,把下面的 DROP TABLE 换成 TRUNCATE ... RESTART IDENTITY CASCADE。)
 --
 -- 用法(在服务器上,按顺序):
---   psql "$DATABASE_URL" -f database/reset-dev.sql
---   psql "$DATABASE_URL" -f database/schema.sql      # 建表 + 加 property_id 列(空表可加 NOT NULL)
---   psql "$DATABASE_URL" -f database/seed-admin.sql   # 重建管理员账号
+--   psql "$DATABASE_URL" -f database/reset-dev.sql    # 删表
+--   psql "$DATABASE_URL" -f database/schema.sql        # 按当前结构重建
+--   psql "$DATABASE_URL" -f database/seed-admin.sql    # 重建超级管理员账号
 --
--- 说明:先 TRUNCATE 清空,保证随后 schema.sql 的 `ADD COLUMN ... NOT NULL` 能在空表上成功。
--- 若某张表还不存在(全新库),对应 TRUNCATE 会报错,可忽略,直接跑 schema.sql 即可。
+-- CASCADE 会处理外键依赖,所以表名顺序无所谓。
 
-TRUNCATE TABLE
+DROP TABLE IF EXISTS
+  caption_profiles,
   publish_records,
   draft_images,
   drafts,
@@ -22,7 +27,8 @@ TRUNCATE TABLE
   strategy_heat_rows,
   strategy_keywords,
   property_channels,
+  user_project_access,
   properties,
   auth_sessions,
   console_users
-RESTART IDENTITY CASCADE;
+CASCADE;

@@ -8,26 +8,12 @@ import { useGetMaterialUploadOptionsQuery, useUpdateMaterialTagsMutation } from 
 import { selectConsoleCurrentProject } from "@/store/consoleSlice";
 import { useAppSelector } from "@/store/hooks";
 import type { MaterialUploadResponse, QuickTagGroup } from "@/shared/types/console";
+import { MARKETING_STAGES } from "@/features/console/shared/marketingStages";
 
 const emptyUploadOptions: MaterialUploadResponse = {
   attributeGroups: [],
   sellingPointGroups: [],
 };
-
-const materialStageOptions = [
-    "交付和口碑期",
-    "亮相开放前",
-    "现房在售期",
-    "诚意登记期",
-    "专项营销活动",
-    "尾盘与清盘期",
-    "横沔和泗青公园专题笔记",
-    "张江金茂府品质交付",
-    "区域价值",
-    "配套价值",
-    "产品力价值",
-    "地段价值",
-];
 
 const { Dragger } = Upload;
 
@@ -363,7 +349,7 @@ export function MaterialUploadImagePage() {
               <div>
                 <p>营销阶段</p>
                 <Select
-                    options={materialStageOptions.map((value) => ({ label: value, value }))}
+                    options={MARKETING_STAGES.map((value) => ({ label: value, value }))}
                     placeholder="请选择"
                     value={stage === "待配置" ? undefined : stage}
                     onChange={(value) => setStage(value)}

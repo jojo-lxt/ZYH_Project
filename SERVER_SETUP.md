@@ -398,29 +398,28 @@ properties
 property_channels
 console_users
 auth_sessions
+user_project_access
+publish_records
+caption_profiles
 drafts
 draft_images
 ```
 
 说明：
 
-```text
-这个脚本只建表和补充缺失字段，不会清空已有数据。
+- `schema.sql` 是**全新库的权威结构定义**（纯 `CREATE TABLE IF NOT EXISTS`，列 / 外键 / 约束都写在各自建表处），**不会修改已有表的结构、也不清数据**。全新库直接执行即可。
+- **开发阶段重置**（清掉全部数据、让结构与 `schema.sql` 完全一致）：`reset-dev.sql` 会 `DROP` 所有表（仅开发用，清空全部数据），再由 `schema.sql` 重建。按顺序执行：
 
-**按项目隔离迁移(2026-07-09 起)**：业务表新增了 `NOT NULL` 的 `property_id` 列。**已有开发库**需先清空再建表(空表才能加 `NOT NULL` 列),按顺序执行:
+  ```bash
+  PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/reset-dev.sql
+  PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/schema.sql
+  PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/seed-admin.sql
+  ```
 
-```bash
-PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/reset-dev.sql
-PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/schema.sql
-PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/seed-admin.sql
-```
+- **已有库带数据、不能清库时**：因为 `schema.sql` 不改已有表,升级要另跑迁移 SQL,见下面「已有库升级」小节。
+- 图片上传后的原图二进制保存在 `material_files` 表中,素材表 `materials.image_url` 指向读取原图的 API。
 
-`reset-dev.sql` 会 `TRUNCATE` 所有表(仅开发阶段用,会清空全部数据);全新库无需 reset,直接执行 `schema.sql` 即可。
-图片上传后的原图二进制保存在 material_files 表中，素材表 materials.image_url 指向读取原图的 API。
-如果你需要把现有假数据导入数据库，可以后续单独写 seed 脚本。
-```
-
-创建第一个后台管理员账号。必须替换 `<数据库密码>`、`<管理员手机号>`、`<管理员登录密码>`、`<管理员姓名>`：
+创建第一个后台账号(角色为**超级管理员**,看/管全部)。必须替换 `<数据库密码>`、`<管理员手机号>`、`<管理员登录密码>`、`<管理员姓名>`：
 
 ```bash
 cd /home/ubuntu/content-publisher-console
@@ -432,13 +431,50 @@ PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publi
   -f database/seed-admin.sql
 ```
 
-`database/seed-admin.sql` 使用 `ON CONFLICT (phone) DO UPDATE`，可以重复执行；已存在同手机号管理员时会更新姓名、密码 hash 和状态，不会插入重复账号。管理员登录后可自行创建项目，项目归属到该账号(`properties.owner_id`)。
+`database/seed-admin.sql` 使用 `ON CONFLICT (phone) DO UPDATE`，可以重复执行；已存在同手机号账号时会更新姓名、密码 hash 和状态,并把角色设为**超级管理员**。超级管理员登录后可创建「管理员(开发商)」账号,管理员再创建「员工」并分配自己名下的项目。
 
-验证管理员账号已写入:
+验证账号已写入:
 
 ```bash
 PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher \
   -c "SELECT name, phone, role, status FROM console_users;"
+```
+
+### 已有库升级(有数据、不能清库时)
+
+`schema.sql` 只 `CREATE TABLE IF NOT EXISTS`,**不会改动已有表的列/约束**。所以已有旧数据的库(已是「按项目隔离 + 两级权限」版本)升级到三级权限,要**手动**跑下面这段一次性迁移 —— 它做的正是 `schema.sql` 对已有表做不到的那部分;跑完再执行一次 `schema.sql`,把全新表(`user_project_access`、`caption_profiles`)补上:
+
+```bash
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher <<'SQL'
+-- 角色两级 → 三级(先改数据,否则违反新 CHECK)
+UPDATE console_users SET role = '超级管理员' WHERE role = '管理员';
+UPDATE console_users SET role = '员工'       WHERE role = '游客';
+-- console_users:去掉废弃的 property、换角色约束、加 manager_id
+ALTER TABLE console_users DROP COLUMN IF EXISTS property;
+ALTER TABLE console_users DROP CONSTRAINT IF EXISTS console_users_role_check;
+ALTER TABLE console_users ADD CONSTRAINT console_users_role_check CHECK (role IN ('超级管理员','管理员','员工'));
+ALTER TABLE console_users ADD COLUMN IF NOT EXISTS manager_id text REFERENCES console_users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_console_users_manager ON console_users (manager_id);
+SQL
+# 再跑一次 schema.sql,补齐全新表 user_project_access / caption_profiles(已存在的表会被 IF NOT EXISTS 跳过)
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher -f database/schema.sql
+```
+
+升级后:旧「员工(原游客)」的 `manager_id` 与 `user_project_access` 均为空 —— 登录后看不到任何项目,需由超级管理员/管理员在用户管理里重新分配所属管理员与项目。
+
+### 文案风格档案(可选,让小程序文案风格稳定)
+
+给某个项目填一份风格档案后,小程序预览文案会贴合范例风格(`temperature=0.5`);不填则退化为原来的通用生成。用你与国内大模型(如 DeepSeek)对话产出的**蒸馏档案**(风格 spec + 2~4 条认可范例)写入:
+
+```sql
+INSERT INTO caption_profiles (property_id, style_spec, examples)
+VALUES (
+  '<项目id>',
+  '<蒸馏后的风格/结构/硬约束,例如:轻松活泼、多用 emoji、结尾带 3-5 个话题标签、200-300 字>',
+  '[{"title":"示例标题","body":"示例正文...","topics":["话题1","话题2"]}]'::jsonb
+)
+ON CONFLICT (property_id) DO UPDATE
+  SET style_spec = EXCLUDED.style_spec, examples = EXCLUDED.examples, updated_at = now();
 ```
 
 ## 11. 创建生产环境变量

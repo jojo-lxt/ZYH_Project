@@ -11,7 +11,7 @@ export async function PATCH(
 
   const { id } = await context.params;
   try {
-    const user = await updateConsoleUser(id, await request.json());
+    const user = await updateConsoleUser(id, await request.json(), auth.user);
 
     if (!user) {
       return Response.json({ error: "用户不存在" }, { status: 404 });
@@ -33,7 +33,7 @@ export async function DELETE(
   const { id } = await context.params;
 
   try {
-    return Response.json({ deleted: await deleteConsoleUser(id) });
+    return Response.json({ deleted: await deleteConsoleUser(id, auth.user) });
   } catch (error) {
     return jsonError(error, "用户删除失败");
   }

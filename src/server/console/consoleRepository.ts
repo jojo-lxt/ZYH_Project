@@ -93,6 +93,8 @@ type PropertyDbRow = {
   developer: string;
   id: string;
   name: string;
+  owner_id?: string;
+  owner_name?: string;
   stage: string;
   type: string;
 };
@@ -100,8 +102,12 @@ type PropertyDbRow = {
 type UserDbRow = {
   created_at: Date | string;
   id: string;
+  manager_id?: string | null;
+  manager_name?: string | null;
   name: string;
   phone: string;
+  project_ids?: string[];
+  project_names?: string[];
   role: string;
   status: string;
 };
@@ -319,6 +325,8 @@ function mapProperty(row: PropertyDbRow): PropertyRow {
     developer: row.developer,
     key: row.id,
     name: row.name,
+    ownerId: row.owner_id ?? undefined,
+    ownerName: row.owner_name ?? undefined,
     stage: row.stage,
     type: row.type,
   };
@@ -328,8 +336,12 @@ function mapUser(row: UserDbRow): UserRow {
   return {
     createdAt: formatDateTime(row.created_at),
     key: row.id,
+    managerId: row.manager_id ?? null,
+    managerName: row.manager_name ?? null,
     name: row.name,
     phone: row.phone,
+    projectKeys: row.project_ids ?? [],
+    projectNames: row.project_names ?? [],
     role: row.role,
     status: row.status,
   };
@@ -862,17 +874,21 @@ export async function createMaterialUpload(formData: FormData, propertyId: strin
 }
 
 // 图片走 <img src> 加载,浏览器带不上 X-Project-Id 头,但会带 session cookie ——
-// 所以按「用户归属」过滤(该素材所属项目须归当前用户,或管理员放行),而不是按当前选中项目。
-export async function getMaterialFile(id: number, scope: PropertyScope) {
+// 所以按「用户归属」过滤(超管全放;管理员限自己项目;员工限被分配项目),而不是按当前选中项目。
+export async function getMaterialFile(id: number, scope: AccessScope) {
   return queryOne<MaterialFileRow>(
     `
       SELECT f.original_name, f.mime_type, f.size_bytes, f.bytes
       FROM material_files f
       JOIN materials m ON m.id = f.material_id
       JOIN properties p ON p.id = m.property_id
-      WHERE f.material_id = $1 AND (p.owner_id = $2 OR $3)
+      WHERE f.material_id = $1
+        AND ( $2 = '超级管理员'
+              OR p.owner_id = $3
+              OR EXISTS (SELECT 1 FROM user_project_access upa
+                          WHERE upa.user_id = $3 AND upa.property_id = p.id) )
     `,
-    [id, scope.userId, scope.isAdmin],
+    [id, scope.role, scope.userId],
   );
 }
 
@@ -1073,23 +1089,35 @@ export async function deleteConfigItem(id: string, propertyId: string) {
   return result.rowCount ?? 0;
 }
 
-// 项目归属过滤:普通用户只看自己创建的项目;管理员(isAdmin)看全部。
-export type PropertyScope = { isAdmin: boolean; userId: string };
+// 三级权限:超级管理员看全部;管理员看自己拥有的(owner_id);员工看被分配的(user_project_access)。
+export type Role = "超级管理员" | "管理员" | "员工";
+export type AccessScope = { role: Role; userId: string };
 
-export async function getProperties(scope: PropertyScope): Promise<ConsolePropertiesResponse> {
+// 「内容可见」谓词(项目切换器 / 素材 / 配置 / 概览 / 策略 / 图片都用它):超管 OR 归属管理员 OR 被分配员工。
+// 用于 SQL 片段,占位符为 [role, userId]。
+const CONTENT_ACCESS_WHERE = `
+  ( $1 = '超级管理员'
+    OR p.owner_id = $2
+    OR EXISTS (SELECT 1 FROM user_project_access upa WHERE upa.user_id = $2 AND upa.property_id = p.id) )
+`;
+
+export async function getProperties(scope: AccessScope): Promise<ConsolePropertiesResponse> {
+  const params = [scope.role, scope.userId];
   const [properties, total] = await Promise.all([
     queryRows<PropertyDbRow>(
       `
-        SELECT id, developer, name, type, stage, address, created_at
-        FROM properties
-        WHERE owner_id = $1 OR $2
-        ORDER BY created_at DESC, id
+        SELECT p.id, p.developer, p.name, p.type, p.stage, p.address, p.created_at,
+               p.owner_id, COALESCE(o.name, '') AS owner_name
+        FROM properties p
+        LEFT JOIN console_users o ON o.id = p.owner_id
+        WHERE ${CONTENT_ACCESS_WHERE}
+        ORDER BY p.created_at DESC, p.id
       `,
-      [scope.userId, scope.isAdmin],
+      params,
     ),
     queryOne<{ count: string }>(
-      "SELECT COUNT(*)::text AS count FROM properties WHERE owner_id = $1 OR $2",
-      [scope.userId, scope.isAdmin],
+      `SELECT COUNT(*)::text AS count FROM properties p WHERE ${CONTENT_ACCESS_WHERE}`,
+      params,
     ),
   ]);
 
@@ -1136,7 +1164,7 @@ export async function createProperty(
 export async function updateProperty(
   id: string,
   input: Partial<Omit<PropertyRow, "createdAt" | "key">>,
-  scope: PropertyScope,
+  scope: AccessScope,
 ) {
   const row = await queryOne<PropertyDbRow>(
     `
@@ -1147,7 +1175,7 @@ export async function updateProperty(
         type = COALESCE($4, type),
         stage = COALESCE($5, stage),
         address = COALESCE($6, address)
-      WHERE id = $1 AND (owner_id = $7 OR $8)
+      WHERE id = $1 AND (owner_id = $7 OR $8 = '超级管理员')
       RETURNING id, developer, name, type, stage, address, description, created_at
     `,
     [
@@ -1158,46 +1186,53 @@ export async function updateProperty(
       input.stage ?? null,
       input.address ?? null,
       scope.userId,
-      scope.isAdmin,
+      scope.role,
     ],
   );
 
   return row ? mapProperty(row) : null;
 }
 
-export async function deleteProperty(id: string, scope: PropertyScope) {
+export async function deleteProperty(id: string, scope: AccessScope) {
   const result = await query(
-    "DELETE FROM properties WHERE id = $1 AND (owner_id = $2 OR $3)",
-    [id, scope.userId, scope.isAdmin],
+    "DELETE FROM properties WHERE id = $1 AND (owner_id = $2 OR $3 = '超级管理员')",
+    [id, scope.userId, scope.role],
   );
   return result.rowCount ?? 0;
 }
 
-// 供 requireConsoleProject 用:校验用户能否访问某项目(管理员放行,否则须为归属人)。
-export async function userCanAccessProject(projectId: string, scope: PropertyScope) {
-  if (scope.isAdmin) {
+// 供 requireConsoleProject 用:校验用户能否访问某项目的内容(超管放行;管理员须为归属人;员工须被分配)。
+export async function userCanAccessProject(projectId: string, scope: AccessScope) {
+  if (scope.role === "超级管理员") {
     return true;
   }
 
   const row = await queryOne<{ ok: number }>(
-    "SELECT 1 AS ok FROM properties WHERE id = $1 AND owner_id = $2",
+    `SELECT 1 AS ok
+       FROM properties p
+      WHERE p.id = $1
+        AND ( p.owner_id = $2
+              OR EXISTS (SELECT 1 FROM user_project_access upa
+                          WHERE upa.user_id = $2 AND upa.property_id = p.id) )
+      LIMIT 1`,
     [projectId, scope.userId],
   );
 
   return row !== null;
 }
 
+// 项目管理类读取(详情/二维码):只放行超管 + 归属管理员,员工不看项目详情。
 export async function getPropertyDetail(
   id: string,
-  scope: PropertyScope,
+  scope: AccessScope,
 ): Promise<ConsolePropertyDetailResponse | null> {
   const property = await queryOne<PropertyDbRow>(
     `
       SELECT id, developer, name, type, stage, address, description, created_at
       FROM properties
-      WHERE id = $1 AND (owner_id = $2 OR $3)
+      WHERE id = $1 AND (owner_id = $2 OR $3 = '超级管理员')
     `,
-    [id, scope.userId, scope.isAdmin],
+    [id, scope.userId, scope.role],
   );
 
   if (!property) {
@@ -1231,16 +1266,80 @@ export async function getPropertyDetail(
   };
 }
 
-export async function getUsers(): Promise<ConsoleUsersResponse> {
+// 某管理员名下的项目 id(给员工分配项目时做子集校验)。
+export async function getProjectIdsOwnedBy(ownerId: string): Promise<string[]> {
+  const rows = await queryRows<{ id: string }>(
+    "SELECT id FROM properties WHERE owner_id = $1",
+    [ownerId],
+  );
+  return rows.map((r) => r.id);
+}
+
+// 取某账号角色(校验 managerId 是否为管理员)。
+export async function getUserRole(id: string): Promise<Role | null> {
+  const row = await queryOne<{ role: Role }>(
+    "SELECT role FROM console_users WHERE id = $1 LIMIT 1",
+    [id],
+  );
+  return row?.role ?? null;
+}
+
+// 取某员工的所属管理员 id(更新/删除时校验「是否归当前管理员」)。
+export async function getUserManagerId(id: string): Promise<string | null> {
+  const row = await queryOne<{ manager_id: string | null }>(
+    "SELECT manager_id FROM console_users WHERE id = $1 LIMIT 1",
+    [id],
+  );
+  return row?.manager_id ?? null;
+}
+
+// 员工被分配的项目 id(编辑表单回填)。
+export async function getUserProjectIds(userId: string): Promise<string[]> {
+  const rows = await queryRows<{ property_id: string }>(
+    "SELECT property_id FROM user_project_access WHERE user_id = $1",
+    [userId],
+  );
+  return rows.map((r) => r.property_id);
+}
+
+// 重置某员工的项目授权(先删后插)。
+export async function setUserProjectAccess(userId: string, propertyIds: string[]): Promise<void> {
+  await withTransaction(async (client) => {
+    await client.query("DELETE FROM user_project_access WHERE user_id = $1", [userId]);
+    for (const pid of propertyIds) {
+      await client.query(
+        "INSERT INTO user_project_access (user_id, property_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [userId, pid],
+      );
+    }
+  });
+}
+
+export async function getUsers(scope: AccessScope): Promise<ConsoleUsersResponse> {
+  // 超管看全部;管理员只看自己名下员工(manager_id = 自己)。
+  const where = `($1 = '超级管理员') OR (u.manager_id = $2)`;
+  const params = [scope.role, scope.userId];
   const [users, total] = await Promise.all([
     queryRows<UserDbRow>(
       `
-        SELECT id, name, phone, role, status, created_at
-        FROM console_users
-        ORDER BY created_at DESC, id
+        SELECT u.id, u.name, u.phone, u.role, u.status, u.created_at, u.manager_id,
+               m.name AS manager_name,
+               COALESCE(array_agg(p.id)   FILTER (WHERE p.id   IS NOT NULL), '{}') AS project_ids,
+               COALESCE(array_agg(p.name) FILTER (WHERE p.name IS NOT NULL), '{}') AS project_names
+        FROM console_users u
+        LEFT JOIN console_users m        ON m.id = u.manager_id
+        LEFT JOIN user_project_access upa ON upa.user_id = u.id
+        LEFT JOIN properties p           ON p.id = upa.property_id
+        WHERE ${where}
+        GROUP BY u.id, m.name
+        ORDER BY u.created_at DESC, u.id
       `,
+      params,
     ),
-    queryOne<{ count: string }>("SELECT COUNT(*)::text AS count FROM console_users"),
+    queryOne<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM console_users u WHERE ${where}`,
+      params,
+    ),
   ]);
 
   return {
@@ -1253,19 +1352,30 @@ export async function createUser(input: {
   name: string;
   password: string;
   phone: string;
-  role: string;
+  role: Role;
+  managerId: string | null;
+  projectIds: string[];
 }) {
   const passwordHash = await hashPassword(input.password);
-  const row = await queryOne<UserDbRow>(
-    `
-      INSERT INTO console_users (id, name, phone, role, password_hash, status)
-      VALUES ($1, $2, $3, $4, $5, 'active')
-      RETURNING id, name, phone, role, status, created_at
-    `,
-    [randomUUID(), input.name, input.phone, input.role, passwordHash],
-  );
-
-  return row ? mapUser(row) : null;
+  return withTransaction(async (client) => {
+    const id = randomUUID();
+    const result = await client.query<UserDbRow>(
+      `
+        INSERT INTO console_users (id, name, phone, role, manager_id, password_hash, status)
+        VALUES ($1, $2, $3, $4, $5, $6, 'active')
+        RETURNING id, name, phone, role, status, created_at, manager_id
+      `,
+      [id, input.name, input.phone, input.role, input.managerId, passwordHash],
+    );
+    for (const pid of input.projectIds) {
+      await client.query(
+        "INSERT INTO user_project_access (user_id, property_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        [id, pid],
+      );
+    }
+    const row = result.rows[0];
+    return row ? mapUser(row) : null;
+  });
 }
 
 export async function updateUser(
@@ -1274,34 +1384,49 @@ export async function updateUser(
     name?: string;
     password?: string;
     phone?: string;
-    role?: string;
+    role?: Role;
     status?: string;
+    managerId?: string | null;
   },
+  projectIds?: string[],
 ) {
   const passwordHash = input.password ? await hashPassword(input.password) : null;
-  const row = await queryOne<UserDbRow>(
-    `
-      UPDATE console_users
-      SET
-        name = COALESCE($2, name),
-        phone = COALESCE($3, phone),
-        role = COALESCE($4, role),
-        status = COALESCE($5, status),
-        password_hash = COALESCE($6, password_hash)
-      WHERE id = $1
-      RETURNING id, name, phone, role, status, created_at
-    `,
-    [
-      id,
-      input.name ?? null,
-      input.phone ?? null,
-      input.role ?? null,
-      input.status ?? null,
-      passwordHash,
-    ],
-  );
-
-  return row ? mapUser(row) : null;
+  return withTransaction(async (client) => {
+    const result = await client.query<UserDbRow>(
+      `
+        UPDATE console_users
+        SET
+          name = COALESCE($2, name),
+          phone = COALESCE($3, phone),
+          role = COALESCE($4, role),
+          status = COALESCE($5, status),
+          manager_id = COALESCE($6, manager_id),
+          password_hash = COALESCE($7, password_hash)
+        WHERE id = $1
+        RETURNING id, name, phone, role, status, created_at, manager_id
+      `,
+      [
+        id,
+        input.name ?? null,
+        input.phone ?? null,
+        input.role ?? null,
+        input.status ?? null,
+        input.managerId ?? null,
+        passwordHash,
+      ],
+    );
+    if (projectIds) {
+      await client.query("DELETE FROM user_project_access WHERE user_id = $1", [id]);
+      for (const pid of projectIds) {
+        await client.query(
+          "INSERT INTO user_project_access (user_id, property_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+          [id, pid],
+        );
+      }
+    }
+    const row = result.rows[0];
+    return row ? mapUser(row) : null;
+  });
 }
 
 export async function deleteUser(id: string) {
