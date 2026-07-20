@@ -6,11 +6,13 @@ export const runtime = "nodejs";
 function parseCount(value: string | null) {
   const count = Number(value);
 
-  if (!Number.isFinite(count)) {
+  // 注意:缺省(null)或空串会让 Number 得到 0(而非 NaN),不能只靠 isFinite 兜底,
+  // 否则 Math.max(0,1) 会把「没传 count」变成 1。显式判空 + 下限校验,缺省/非法时回退默认 5。
+  if (!value || !Number.isFinite(count) || count < 1) {
     return 5;
   }
 
-  return Math.min(Math.max(Math.trunc(count), 1), 20);
+  return Math.min(Math.trunc(count), 20);
 }
 
 export async function GET(
