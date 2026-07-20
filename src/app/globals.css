@@ -57,8 +57,9 @@ textarea {
   grid-template-columns: minmax(0, 1fr) 606px;
   overflow: hidden;
   background:
-    repeating-linear-gradient(-28deg, transparent 0 72px, rgba(15, 118, 110, 0.025) 72px 75px),
-    #f8fbff;
+    linear-gradient(135deg, rgba(0, 107, 255, 0.08), transparent 30%),
+    repeating-linear-gradient(-28deg, transparent 0 74px, rgba(0, 184, 255, 0.08) 74px 76px),
+    #f7fbff;
 }
 
 .login-visual {
@@ -68,8 +69,7 @@ textarea {
   place-items: center;
   overflow: hidden;
   background:
-    linear-gradient(115deg, transparent 0 54%, rgba(255, 255, 255, 0.24) 54% 55%, transparent 55% 100%),
-    linear-gradient(135deg, #061a38 0%, #006bff 42%, #00a4e8 100%);
+    linear-gradient(135deg, #061a38 0%, #006bff 44%, #00b8ff 74%, #18c964 100%);
 }
 
 .login-visual::before,
@@ -110,9 +110,11 @@ textarea {
   height: 310px;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.38);
-  border-radius: 26px;
-  background: rgba(255, 255, 255, 0.16);
-  box-shadow: 0 32px 90px rgba(6, 78, 59, 0.38);
+  border-radius: 8px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08)),
+    rgba(255, 255, 255, 0.12);
+  box-shadow: 0 34px 90px rgba(0, 37, 92, 0.34);
   transform: rotate(-18deg);
   backdrop-filter: blur(10px);
 }
@@ -209,7 +211,7 @@ textarea {
 
 .login-tabs .ant-tabs-ink-bar {
   height: 3px;
-  background: #006bff;
+  background: linear-gradient(90deg, #006bff, #00b8ff);
 }
 
 .login-card .ant-input-affix-wrapper,
@@ -270,7 +272,7 @@ textarea {
   height: 56px;
   margin-top: 14px;
   border: 0;
-  background: #006bff;
+  background: linear-gradient(135deg, #006bff, #00b8ff) !important;
   font-size: 16px;
   font-weight: 800;
 }
@@ -363,24 +365,34 @@ textarea {
 }
 
 .ant-btn-primary {
-  background: var(--primary);
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #006bff 0%, #00b8ff 100%) !important;
+  color: #fff !important;
 }
 
 .ant-btn-primary:not(:disabled):not(.ant-btn-disabled):hover {
-  background: var(--primary-dark);
+  border-color: transparent !important;
+  background: linear-gradient(135deg, #004fd1 0%, #00a4e8 100%) !important;
 }
 
 .console-shell {
   min-height: 100vh;
-  background: #eff7ff;
-  color: #1f2933;
+  background:
+    linear-gradient(135deg, rgba(0, 184, 255, 0.14), rgba(0, 184, 255, 0) 34%),
+    linear-gradient(225deg, rgba(255, 107, 74, 0.09), rgba(255, 107, 74, 0) 34%),
+    repeating-linear-gradient(90deg, rgba(0, 107, 255, 0.05) 0 1px, transparent 1px 82px),
+    repeating-linear-gradient(0deg, rgba(0, 107, 255, 0.045) 0 1px, transparent 1px 82px),
+    #f4f9ff;
+  color: #102033;
 }
 
 .console-auth-loading {
   display: grid;
   min-height: 100vh;
   place-items: center;
-  background: #f4f9ff;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 107, 255, 0.05) 0 1px, transparent 1px 80px),
+    #f4f9ff;
   color: #5f6f86;
   font-size: 14px;
 }
@@ -390,8 +402,10 @@ textarea {
   top: 0;
   height: 100vh;
   overflow: auto;
-  border-right: 1px solid #d4ded6;
-  background: linear-gradient(180deg, #e9f3ed 0%, #dde9df 100%) !important;
+  border-right: 1px solid rgba(0, 184, 255, 0.22);
+  background:
+    linear-gradient(180deg, rgba(10, 29, 55, 0.98) 0%, rgba(11, 45, 83, 0.96) 55%, rgba(4, 79, 119, 0.96) 100%) !important;
+  box-shadow: 14px 0 42px rgba(6, 24, 56, 0.18);
 }
 
 .console-sidebar .ant-layout-sider-children {
@@ -406,7 +420,7 @@ textarea {
   align-items: center;
   gap: 10px;
   padding: 0 16px;
-  color: #1f4d42;
+  color: #e9f7ff;
 }
 
 .brand-mark {
@@ -427,7 +441,7 @@ textarea {
 .side-menu.ant-menu {
   flex: 1;
   margin-top: 16px;
-  color: #26372f;
+  color: rgba(235, 248, 255, 0.82);
   border-inline-end: 0 !important;
   background: transparent;
 }
@@ -475,11 +489,12 @@ textarea {
   grid-template-columns: 260px 1fr auto;
   align-items: center;
   gap: 20px;
-  border-bottom: 1px solid #d5e9f7;
-  background: rgba(250, 248, 243, 0.92) !important;
+  border-bottom: 1px solid rgba(191, 216, 234, 0.78);
+  background: rgba(247, 251, 255, 0.86) !important;
   line-height: normal;
   padding: 0 28px;
   backdrop-filter: blur(10px);
+  box-shadow: 0 12px 34px rgba(16, 42, 82, 0.08);
 }
 
 .project-picker {
@@ -524,7 +539,7 @@ textarea {
   align-items: center;
   gap: 8px;
   height: 38px;
-  color: #26372f;
+  color: #102033;
   white-space: nowrap;
 }
 
@@ -534,23 +549,29 @@ textarea {
 
 .user-area em {
   border: 1px solid #e0b783;
+  border-color: rgba(255, 107, 74, 0.34);
   border-radius: 999px;
-  background: #fff7e8;
-  color: #9a5a13;
+  background: #fff3ed;
+  color: #d94b2b;
   font-style: normal;
   padding: 2px 8px;
 }
 
 .console-content {
   min-height: calc(100vh - 62px);
-  padding: 16px 12px 18px;
+  padding: 20px 18px 24px;
 }
 
 .console-page {
-  min-height: calc(100vh - 96px);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
+  min-height: calc(100vh - 110px);
+  border: 1px solid rgba(191, 216, 234, 0.78);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(247, 251, 255, 0.84)),
+    rgba(255, 255, 255, 0.84);
   padding: 24px;
+  box-shadow: var(--surface-shadow);
+  backdrop-filter: blur(14px);
 }
 
 .mode-toggle,
@@ -644,9 +665,8 @@ textarea {
   height: 40px;
   border-radius: 12px;
   background:
-    linear-gradient(135deg, rgba(245, 197, 66, 0.95) 0 18%, transparent 18%),
-    linear-gradient(135deg, #006bff, #8aa26f);
-  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.2);
+    linear-gradient(135deg, #006bff, #00b8ff 48%, #18c964);
+  box-shadow: 0 14px 30px rgba(0, 107, 255, 0.2);
 }
 
 .console-stat-card p {
@@ -828,8 +848,8 @@ textarea {
 }
 
 .rank-list.green span {
-  background: #bfe8c9;
-  color: #236c3e;
+  background: linear-gradient(135deg, #18c964, #8ee86f);
+  color: #073a1e;
 }
 
 .rank-list em,
@@ -965,7 +985,7 @@ textarea {
 }
 
 .orange-number {
-  color: #f1662d;
+  color: #ff6b4a;
 }
 
 .material-page {
@@ -974,6 +994,8 @@ textarea {
   gap: 16px;
   padding: 0;
   overflow: hidden;
+  border-color: rgba(191, 216, 234, 0.78);
+  background: rgba(255, 255, 255, 0.78);
 }
 
 .filter-rail {
@@ -981,6 +1003,9 @@ textarea {
   overflow-y: auto;
   border-right: 1px solid #dbeaf5;
   padding: 26px 24px;
+  background:
+    linear-gradient(180deg, rgba(238, 247, 255, 0.72), rgba(255, 255, 255, 0.72)),
+    #fff;
 }
 
 .filter-head {
@@ -1081,7 +1106,7 @@ textarea {
 .filter-menu-label em {
   min-width: 20px;
   border-radius: 999px;
-  background: #6f63ff;
+  background: linear-gradient(135deg, #006bff, #00b8ff);
   color: #fff;
   font-size: 11px;
   font-style: normal;
@@ -1148,8 +1173,8 @@ textarea {
 }
 
 .material-card.selected {
-  border-color: #006bff;
-  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.14);
+  border-color: #00b8ff;
+  box-shadow: 0 0 0 2px rgba(0, 184, 255, 0.18), 0 24px 52px rgba(16, 42, 82, 0.14);
 }
 
 .material-card .ant-card-body {
@@ -1201,7 +1226,7 @@ textarea {
   right: 10px;
   z-index: 2;
   border-radius: 6px;
-  background: #006bff;
+  background: linear-gradient(135deg, #006bff, #00b8ff);
   color: #fff;
   font-weight: 800;
   padding: 4px 8px;
@@ -1389,10 +1414,10 @@ textarea {
   min-height: 30px;
   align-items: center;
   gap: 7px;
-  border: 1px solid #d7d1c8;
+  border: 1px solid #c4daec;
   border-radius: 999px;
   background: #fff;
-  color: #363f38;
+  color: #2c405c;
   cursor: pointer;
   font-size: 13px;
   padding: 4px 10px;
@@ -1762,9 +1787,9 @@ textarea {
   height: 40px;
   border-radius: 10px;
   background:
-    linear-gradient(90deg, transparent 45%, #6b7d73 45% 55%, transparent 55%),
-    linear-gradient(transparent 45%, #6b7d73 45% 55%, transparent 55%),
-    #edf5f1;
+    linear-gradient(90deg, transparent 45%, #006bff 45% 55%, transparent 55%),
+    linear-gradient(transparent 45%, #006bff 45% 55%, transparent 55%),
+    #eaf7ff;
 }
 
 .taxonomy-section-head {
@@ -1864,7 +1889,7 @@ textarea {
 }
 
 .taxonomy-actions i:hover {
-  background: #eef5f1;
+  background: #eaf7ff;
   color: #006bff;
 }
 
@@ -1938,7 +1963,9 @@ textarea {
   min-height: calc(100vh - 96px);
   flex-direction: column;
   gap: 34px;
-  background: #f8fbff;
+  background:
+    linear-gradient(135deg, rgba(0, 184, 255, 0.08), rgba(255, 255, 255, 0) 32%),
+    rgba(255, 255, 255, 0.72);
 }
 
 .upload-steps {
@@ -2172,7 +2199,7 @@ textarea {
 }
 
 .selected-tag-row .ant-tag {
-  border-color: #006bff;
+  border-color: #00b8ff;
   color: #006bff;
 }
 
@@ -2198,7 +2225,7 @@ textarea {
 .quick-tag-group button {
   max-width: 96px;
   overflow: hidden;
-  border: 1px solid #006bff;
+  border: 1px solid #00b8ff;
   border-radius: 5px;
   background: #fff;
   color: #006bff;
@@ -2233,9 +2260,9 @@ textarea {
   width: 68px;
   height: 68px;
   place-items: center;
-  border: 6px solid #45b33d;
+  border: 6px solid #18c964;
   border-radius: 999px;
-  color: #45b33d;
+  color: #18c964;
   font-size: 40px;
   line-height: 1;
 }
@@ -2247,10 +2274,10 @@ textarea {
 
 .done-tip {
   width: min(1000px, 100%);
-  border: 1px solid #c9e6f6;
+  border: 1px solid #9edfff;
   border-radius: 7px;
-  background: #eef8ff;
-  color: #2374a5;
+  background: #eaf8ff;
+  color: #006a9f;
   padding: 12px 18px;
   text-align: left;
 }
@@ -2287,18 +2314,14 @@ textarea {
   color: #6b7280;
 }
 
-/* Tech visual refresh */
-.ant-btn-primary {
-  border-color: transparent !important;
-  background: linear-gradient(135deg, #006bff 0%, #00b8ff 100%) !important;
-  color: #fff !important;
-}
-
-.ant-btn-primary:not(:disabled):not(.ant-btn-disabled):hover {
-  border-color: transparent !important;
-  background: linear-gradient(135deg, #004fd1 0%, #00a4e8 100%) !important;
-}
-
+/* ============================================================================
+ * 皮肤覆盖层(Tech visual refresh)—— 位于文件最后,最后加载、会覆盖上方的基础样式。
+ * 说明:下面很多选择器在上方「基础样式」里也各有一份;同名规则「后写覆盖」,
+ *   所以要调这些组件的观感,请改这一层(上方那份是旧底子,改它常常没反应)。
+ *   本层还新增了一批 Ant Design 组件皮肤(表格 / 输入框 / 弹窗 / 抽屉等)。
+ * 注意:本层内部有顺序依赖 —— 先由分组规则铺底、再由具体规则微调,
+ *   不要随意把某条规则往上移,否则会打乱覆盖顺序、改变最终效果。
+ * ============================================================================ */
 .ant-btn-default:not(:disabled):not(.ant-btn-disabled):hover,
 .ant-btn-text:not(:disabled):not(.ant-btn-disabled):hover {
   border-color: rgba(0, 184, 255, 0.46);
@@ -2350,30 +2373,10 @@ textarea {
   box-shadow: var(--surface-shadow);
 }
 
-.login-shell {
-  background:
-    linear-gradient(135deg, rgba(0, 107, 255, 0.08), transparent 30%),
-    repeating-linear-gradient(-28deg, transparent 0 74px, rgba(0, 184, 255, 0.08) 74px 76px),
-    #f7fbff;
-}
-
-.login-visual {
-  background:
-    linear-gradient(135deg, #061a38 0%, #006bff 44%, #00b8ff 74%, #18c964 100%);
-}
-
 .login-visual::before {
   background:
     repeating-linear-gradient(134deg, transparent 0 34px, rgba(255, 255, 255, 0.2) 35px 38px, transparent 39px 58px),
     repeating-linear-gradient(28deg, transparent 0 82px, rgba(255, 255, 255, 0.15) 83px 86px, transparent 87px 118px);
-}
-
-.login-chip {
-  border-radius: 8px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.08)),
-    rgba(255, 255, 255, 0.12);
-  box-shadow: 0 34px 90px rgba(0, 37, 92, 0.34);
 }
 
 .login-logo,
@@ -2388,42 +2391,6 @@ textarea {
   color: #006bff;
 }
 
-.login-tabs .ant-tabs-ink-bar {
-  background: linear-gradient(90deg, #006bff, #00b8ff);
-}
-
-.login-submit.ant-btn {
-  background: linear-gradient(135deg, #006bff, #00b8ff) !important;
-}
-
-.console-shell {
-  background:
-    linear-gradient(135deg, rgba(0, 184, 255, 0.14), rgba(0, 184, 255, 0) 34%),
-    linear-gradient(225deg, rgba(255, 107, 74, 0.09), rgba(255, 107, 74, 0) 34%),
-    repeating-linear-gradient(90deg, rgba(0, 107, 255, 0.05) 0 1px, transparent 1px 82px),
-    repeating-linear-gradient(0deg, rgba(0, 107, 255, 0.045) 0 1px, transparent 1px 82px),
-    #f4f9ff;
-  color: #102033;
-}
-
-.console-auth-loading {
-  background:
-    repeating-linear-gradient(90deg, rgba(0, 107, 255, 0.05) 0 1px, transparent 1px 80px),
-    #f4f9ff;
-  color: #5f6f86;
-}
-
-.console-sidebar.ant-layout-sider {
-  border-right: 1px solid rgba(0, 184, 255, 0.22);
-  background:
-    linear-gradient(180deg, rgba(10, 29, 55, 0.98) 0%, rgba(11, 45, 83, 0.96) 55%, rgba(4, 79, 119, 0.96) 100%) !important;
-  box-shadow: 14px 0 42px rgba(6, 24, 56, 0.18);
-}
-
-.console-brand {
-  color: #e9f7ff;
-}
-
 .brand-mark {
   border: 1px solid rgba(255, 255, 255, 0.28);
   box-shadow: 0 12px 28px rgba(0, 184, 255, 0.24);
@@ -2431,10 +2398,6 @@ textarea {
 
 .brand-mark .anticon {
   font-size: 20px;
-}
-
-.side-menu.ant-menu {
-  color: rgba(235, 248, 255, 0.82);
 }
 
 .side-menu.ant-menu .ant-menu-item,
@@ -2459,12 +2422,6 @@ textarea {
   box-shadow: inset 3px 0 0 #00b8ff;
 }
 
-.console-topbar {
-  border-bottom: 1px solid rgba(191, 216, 234, 0.78);
-  background: rgba(247, 251, 255, 0.86) !important;
-  box-shadow: 0 12px 34px rgba(16, 42, 82, 0.08);
-}
-
 .project-picker .ant-select-selector {
   border-color: rgba(0, 184, 255, 0.34) !important;
   background: rgba(255, 255, 255, 0.86) !important;
@@ -2483,30 +2440,6 @@ textarea {
 .top-nav.ant-menu .ant-menu-item-selected::after,
 .top-nav.ant-menu .ant-menu-item:hover::after {
   border-bottom-color: #00b8ff !important;
-}
-
-.user-area.ant-btn {
-  color: #102033;
-}
-
-.user-area em {
-  border-color: rgba(255, 107, 74, 0.34);
-  background: #fff3ed;
-  color: #d94b2b;
-}
-
-.console-content {
-  padding: 20px 18px 24px;
-}
-
-.console-page {
-  border: 1px solid rgba(191, 216, 234, 0.78);
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.84), rgba(247, 251, 255, 0.84)),
-    rgba(255, 255, 255, 0.84);
-  box-shadow: var(--surface-shadow);
-  backdrop-filter: blur(14px);
 }
 
 .mode-toggle,
@@ -2533,10 +2466,6 @@ textarea {
 .panel-switch button.active {
   background: linear-gradient(135deg, rgba(0, 107, 255, 0.12), rgba(0, 184, 255, 0.16));
   color: #006bff;
-}
-
-.console-tabs {
-  border-bottom-color: #dbeaf5;
 }
 
 .page-title-strip,
@@ -2597,12 +2526,6 @@ textarea {
   position: relative;
 }
 
-.stat-icon {
-  background:
-    linear-gradient(135deg, #006bff, #00b8ff 48%, #18c964);
-  box-shadow: 0 14px 30px rgba(0, 107, 255, 0.2);
-}
-
 .console-stat-card p,
 .section-title-row h2,
 .table-panel h2,
@@ -2633,10 +2556,6 @@ textarea {
   color: #006bff !important;
 }
 
-.orange-number {
-  color: #ff6b4a;
-}
-
 .rank-list span,
 .keyword-rank span,
 .rank-index {
@@ -2644,39 +2563,10 @@ textarea {
   color: #3d2900;
 }
 
-.rank-list.green span {
-  background: linear-gradient(135deg, #18c964, #8ee86f);
-  color: #073a1e;
-}
-
-.material-page {
-  border-color: rgba(191, 216, 234, 0.78);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-.filter-rail {
-  border-right-color: #dbeaf5;
-  background:
-    linear-gradient(180deg, rgba(238, 247, 255, 0.72), rgba(255, 255, 255, 0.72)),
-    #fff;
-}
-
-.filter-block {
-  border-bottom-color: #e4eff8;
-}
-
 .filter-menu.ant-menu-inline .ant-menu-submenu-title:hover,
 .filter-menu.ant-menu-inline .ant-menu-item:hover {
   background: rgba(0, 184, 255, 0.12);
   color: #006bff;
-}
-
-.filter-menu-label em {
-  background: linear-gradient(135deg, #006bff, #00b8ff);
-}
-
-.material-toolbar {
-  border-bottom-color: #dbeaf5;
 }
 
 .material-card {
@@ -2687,15 +2577,6 @@ textarea {
   border-color: rgba(0, 184, 255, 0.55);
   box-shadow: 0 24px 52px rgba(16, 42, 82, 0.14);
   transform: translateY(-2px);
-}
-
-.material-card.selected {
-  border-color: #00b8ff;
-  box-shadow: 0 0 0 2px rgba(0, 184, 255, 0.18), 0 24px 52px rgba(16, 42, 82, 0.14);
-}
-
-.material-thumb span {
-  background: linear-gradient(135deg, #006bff, #00b8ff);
 }
 
 .material-tags .ant-tag,
@@ -2715,24 +2596,11 @@ textarea {
   background: rgba(255, 255, 255, 0.9);
 }
 
-.tag-pill {
-  border-color: #c4daec;
-  background: #fff;
-  color: #2c405c;
-}
-
 .tag-pill:hover,
 .tag-pill.active {
   border-color: #00b8ff;
   background: #eef9ff;
   color: #006bff;
-}
-
-.tag-pill.active i {
-  border-color: #006bff;
-  background:
-    radial-gradient(circle, #006bff 0 45%, transparent 48%),
-    #fff;
 }
 
 .drawer-tags span,
@@ -2764,24 +2632,6 @@ textarea {
   box-shadow: 0 0 0 2px rgba(0, 184, 255, 0.16);
 }
 
-.taxonomy-actions i:hover {
-  background: #eaf7ff;
-  color: #006bff;
-}
-
-.taxonomy-stat i {
-  background:
-    linear-gradient(90deg, transparent 45%, #006bff 45% 55%, transparent 55%),
-    linear-gradient(transparent 45%, #006bff 45% 55%, transparent 55%),
-    #eaf7ff;
-}
-
-.material-upload-page {
-  background:
-    linear-gradient(135deg, rgba(0, 184, 255, 0.08), rgba(255, 255, 255, 0) 32%),
-    rgba(255, 255, 255, 0.72);
-}
-
 .material-drop > .anticon,
 .tag-choice-title > .anticon,
 .tag-choice-option > .anticon,
@@ -2794,27 +2644,6 @@ textarea {
 .done-stats div:nth-child(2) {
   background: #eaf7ff;
   color: #006bff;
-}
-
-.quick-tag-group button {
-  border-color: #00b8ff;
-  color: #006bff;
-}
-
-.selected-tag-row .ant-tag {
-  border-color: #00b8ff;
-  color: #006bff;
-}
-
-.upload-done-card > .anticon {
-  border-color: #18c964;
-  color: #18c964;
-}
-
-.done-tip {
-  border-color: #9edfff;
-  background: #eaf8ff;
-  color: #006a9f;
 }
 
 @media (max-width: 900px) {

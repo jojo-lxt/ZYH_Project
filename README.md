@@ -131,3 +131,4 @@ GET  /api/drafts/[id]/images/[filename]
 - 视觉主题主要集中在 `src/app/providers.tsx`、`src/app/globals.css` 和 `src/features/console/overview/OverviewDashboard.tsx` 的 ECharts 配色中，后续新增页面应沿用这套主题。
 - `src/shared/mock/consoleData.ts` 仍保留作为早期 mock/兜底数据，不代表当前主要数据来源。
 - 小程序发布能力依赖平台官方开放能力和审核权限，普通 H5 无法绕过平台限制直接写入真实小红书草稿页。
+- 第一次用 PostgreSQL？看 `docs/postgres-quickstart.md` —— 面向本项目库表的 psql 快速上手 + 速查小抄。
