@@ -108,7 +108,7 @@ ssh ubuntu@<服务器公网IP>
 src/features/console/components/ConsoleShell.tsx
 ```
 
-顶栏项目切换按**项目 id**工作,当前项目 id 放在 **URL 查询参数 `?project=`** 里(刷新后仍停在同一项目;`ConsoleShell` 用 `useSearchParams` 读、切换时 `router.replace` 改),默认取用户的第一个项目。**项目按创建者归属**:`properties.owner_id` 指向创建者,`getProperties` 按**三级权限**返回可见项目(超级管理员看全部;管理员看自己拥有的 `owner_id`;员工看 `user_project_access` 里被分配的),`requireConsoleProject` 校验用户能否访问该项目、防止用请求头越权;图片接口(`<img>` 带不了头但带 cookie)按同一三级谓词过滤(`getMaterialFile`)。选中的项目 id 通过 RTK Query baseQuery 注入的 `X-Project-Id` 请求头发给后端;`materials`、`config_nodes`(标签/卖点)、`notes`、`strategy_*` 的读写都按 `property_id` 隔离,切换项目即切换数据。图片走 `<img>` 加载、无法带请求头,所以图片接口只做登录校验、不按项目过滤(见 `getMaterialFile` 注释)。服务端用 `requireConsoleProject(request)` 统一校验登录态 + 取当前项目 id。**注意**:项目 id 虽然是通过 `X-Project-Id` 头传的,但每个按项目隔离的 RTK Query 都把当前项目 id 作为**参数**传入(从而进入缓存键),并在项目未选定时 `skip` 不发请求 —— 这样切换项目会因缓存键变化自动重拉,首次也不会发出不带项目 id 的空请求(见 `ConfigPage`/`MaterialsPage`/`OverviewDashboard`/`UploadImagePage` 里的 `useGet*Query(currentProject, { skip: !currentProject })`)。**不要**改回用 `resetApiState` 清缓存:它会把刚拉到的数据一并清掉、导致「接口返回了数据但页面不显示」。
+顶栏项目切换按**项目 id**工作,当前项目 id 放在 **URL 查询参数 `?project=`** 里(刷新后仍停在同一项目;`ConsoleShell` 用 `useSearchParams` 读、切换时 `router.replace` 改)。当前项目解析优先级:**URL `?project=` > 上次选中的项目(Redux `currentProject`)> 用户的第一个项目**;侧边栏/顶部导航链接都用 `withProject()` 带上 `?project=`,避免多项目账号跳转时被拽回第一个项目(纯用「第一个项目」兜底会导致每次跳转都切回首个项目)。**项目按创建者归属**:`properties.owner_id` 指向创建者,`getProperties` 按**三级权限**返回可见项目(超级管理员看全部;管理员看自己拥有的 `owner_id`;员工看 `user_project_access` 里被分配的),`requireConsoleProject` 校验用户能否访问该项目、防止用请求头越权;图片接口(`<img>` 带不了头但带 cookie)按同一三级谓词过滤(`getMaterialFile`)。选中的项目 id 通过 RTK Query baseQuery 注入的 `X-Project-Id` 请求头发给后端;`materials`、`config_nodes`(标签/卖点)、`notes`、`strategy_*` 的读写都按 `property_id` 隔离,切换项目即切换数据。图片走 `<img>` 加载、无法带请求头,所以图片接口只做登录校验、不按项目过滤(见 `getMaterialFile` 注释)。服务端用 `requireConsoleProject(request)` 统一校验登录态 + 取当前项目 id。**注意**:项目 id 虽然是通过 `X-Project-Id` 头传的,但每个按项目隔离的 RTK Query 都把当前项目 id 作为**参数**传入(从而进入缓存键),并在项目未选定时 `skip` 不发请求 —— 这样切换项目会因缓存键变化自动重拉,首次也不会发出不带项目 id 的空请求(见 `ConfigPage`/`MaterialsPage`/`OverviewDashboard`/`UploadImagePage` 里的 `useGet*Query(currentProject, { skip: !currentProject })`)。**不要**改回用 `resetApiState` 清缓存:它会把刚拉到的数据一并清掉、导致「接口返回了数据但页面不显示」。**加载态**:各数据页用 RTK Query 的 `isFetching`/`isLoading` 驱动 loading —— 表格用 `<Table loading>`、非表格数据区(概览图表、素材网格、标签树)用 `<Spin spinning>` 包裹、项目下拉用 `<Select loading>`;新增数据页沿用这套(项目按缓存键切换,`isFetching` 在切项目/刷新时都会亮)。
 
 ## 登录和鉴权
 
@@ -253,7 +253,7 @@ draft_images
 - 建用户时不再要求填默认项目(登录后自建);上传图片可逐张自定义名称(留空用文件名)
 - `console_users`:已移除废弃的 `property` 字段;`role` 三级(`超级管理员`/`管理员`/`员工`,DB `CHECK` 约束);员工用 `manager_id` 指向所属管理员,`user_project_access` 存员工↔项目授权。管理员建员工时项目多选限自己名下、至少 1 个(服务层 `resolveEmployeeProjects` 校验子集);角色下拉按创建者身份收窄(超管可建管理员/员工,管理员只能建员工)
 - 营销阶段下拉单一来源:前端常量 `src/features/console/shared/marketingStages.ts`(`MARKETING_STAGES`),项目管理 + 图片素材三处下拉共用,改这一个文件即处处生效(不落库)
-- 扫码公开预览:`/p/<项目id>` 中间页 → 小程序按 projectId 拉「随机 5 张图 + AI 文案」(可换一批;文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底)。每项目可在 `caption_profiles` 存**文案风格档案**(风格 spec + 认可范例)注入生成、`temperature=0.5` 让风格稳定;无档案退化为原行为
+- 扫码公开预览:`/p/<项目id>` 中间页 → 小程序按 projectId 拉「随机 5 张图 + AI 文案」(可换一批;文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底;响应带 `captionSource`(ai/fallback)+ `captionReason`(兜底原因码),前端/小程序 devtools 可直接判断这次是否走了 AI)。每项目可在 `caption_profiles` 存**文案风格档案**(风格 spec + 认可范例)注入生成、`temperature=0.5` 让风格稳定;无档案退化为原行为
 - 发布存档:小程序确认发布写 `publish_records`（只存 material_ids 引用 + 文案 + 发布人/渠道,不复制图片字节）
 - 用户管理增删改查
 - 图片上传入库，原图存入 `material_files`

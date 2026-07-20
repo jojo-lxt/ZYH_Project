@@ -3,11 +3,22 @@ import "server-only";
 // 小红书种草文案生成。走 OpenAI 兼容接口调用国内大模型(DeepSeek / 通义千问 / 混元 / 智谱 GLM / Kimi 等),
 // 厂商用环境变量配置(LLM_BASE_URL / LLM_API_KEY / LLM_MODEL),换家只改 env、不改代码。
 // 关键:未配置或调用失败时返回「兜底文案」,绝不把错误抛给调用方,保证预览页永远有文案。
+// 返回值带 source("ai"/"fallback")和 reason(兜底原因码),随预览响应下发,线上不看日志也能自查。
 
 export type XhsCaption = {
   body: string;
   title: string;
   topics: string[];
+};
+
+// 文案来源:ai=大模型生成,fallback=兜底(卖点/标签拼接)。
+export type CaptionSource = "ai" | "fallback";
+
+export type CaptionResult = {
+  caption: XhsCaption;
+  source: CaptionSource;
+  // 兜底时的粗粒度原因码(不含密钥/堆栈),随响应返回,方便在前端 devtools 里自查为什么没走 AI。
+  reason?: string;
 };
 
 export type CaptionInput = {
@@ -80,7 +91,8 @@ function buildMessages(input: CaptionInput) {
   ];
 }
 
-function parseCaption(content: string, input: CaptionInput): XhsCaption {
+// 解析模型输出:成功返回文案,内容不可用(空/非 JSON)返回 null,交给上层兜底并记原因。
+function parseCaption(content: string, input: CaptionInput): XhsCaption | null {
   try {
     // 容错:有的模型会带代码块围栏或前后缀,截取第一个 { 到最后一个 }。
     const start = content.indexOf("{");
@@ -93,10 +105,12 @@ function parseCaption(content: string, input: CaptionInput): XhsCaption {
       ? dedupeNonEmpty(parsed.topics.map((topic) => String(topic)))
       : [];
 
+    // 标题和正文都没有 = 模型没给出可用内容,判为解析失败。
     if (!title && !body) {
-      return fallbackCaption(input);
+      return null;
     }
 
+    // 单个字段缺失时用兜底内容补齐,但整体仍算「AI 生成」。
     const fallback = fallbackCaption(input);
 
     return {
@@ -105,23 +119,29 @@ function parseCaption(content: string, input: CaptionInput): XhsCaption {
       topics: topics.length ? topics.slice(0, 6) : fallback.topics,
     };
   } catch {
-    return fallbackCaption(input);
+    return null;
   }
 }
 
-export async function generateXhsCaption(input: CaptionInput): Promise<XhsCaption> {
+export async function generateXhsCaption(input: CaptionInput): Promise<CaptionResult> {
   const baseUrl = process.env.LLM_BASE_URL?.trim();
   const apiKey = process.env.LLM_API_KEY?.trim();
   const model = process.env.LLM_MODEL?.trim();
 
-  // 没配大模型就直接兜底(本地/未接入时也能跑通预览)。
+  // 没配大模型就直接兜底(本地/未接入时也能跑通预览)。这是预期内的、不算失败,不打日志。
   if (!baseUrl || !apiKey || !model) {
-    return fallbackCaption(input);
+    return { caption: fallbackCaption(input), reason: "not_configured", source: "fallback" };
   }
 
   const controller = new AbortController();
   const timeout = Number(process.env.LLM_TIMEOUT_MS ?? 20000);
   const timer = setTimeout(() => controller.abort(), Number.isFinite(timeout) ? timeout : 20000);
+
+  // 真·失败时统一走这里:回兜底文案 + 一行 warn(不含密钥/堆栈),同时把原因码带进响应。
+  function fail(reason: string): CaptionResult {
+    console.warn(`[caption] LLM 调用失败(${reason}),改用兜底文案`);
+    return { caption: fallbackCaption(input), reason, source: "fallback" };
+  }
 
   try {
     const response = await fetch(`${trimTrailingSlashes(baseUrl)}/chat/completions`, {
@@ -141,18 +161,26 @@ export async function generateXhsCaption(input: CaptionInput): Promise<XhsCaptio
     });
 
     if (!response.ok) {
-      return fallbackCaption(input);
+      return fail(`http_${response.status}`);
     }
 
     const data = (await response.json()) as {
       choices?: Array<{ message?: { content?: string } }>;
     };
     const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      return fail("empty_content");
+    }
 
-    return content ? parseCaption(content, input) : fallbackCaption(input);
+    const parsed = parseCaption(content, input);
+    if (!parsed) {
+      return fail("parse_error");
+    }
+
+    return { caption: parsed, source: "ai" };
   } catch {
-    // 超时 / 网络 / 解析异常都兜底,不影响预览接口返回。
-    return fallbackCaption(input);
+    // 超时(abort)/ 网络异常都兜底,不影响预览接口返回。
+    return fail(controller.signal.aborted ? "timeout" : "network_error");
   } finally {
     clearTimeout(timer);
   }

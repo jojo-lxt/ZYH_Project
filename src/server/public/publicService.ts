@@ -1,5 +1,5 @@
 import "server-only";
-import { generateXhsCaption, type XhsCaption } from "@/server/ai/caption";
+import { generateXhsCaption, type CaptionSource, type XhsCaption } from "@/server/ai/caption";
 import {
   createPublishRecord,
   getCaptionProfile,
@@ -10,6 +10,10 @@ import {
 
 export type ProjectPreview = {
   caption: XhsCaption;
+  // 文案来源:ai=大模型生成,fallback=兜底(卖点/标签拼接);兜底时 captionReason 给粗粒度原因码。
+  // 供前端 / 小程序 devtools 直接看这次文案是不是真走了 AI(线上不看日志也能自查)。
+  captionReason?: string;
+  captionSource: CaptionSource;
   images: Array<{ id: number; url: string }>;
   projectName: string;
 };
@@ -29,7 +33,7 @@ export async function getProjectPreview(projectId: string, count: number): Promi
     getCaptionProfile(projectId),
   ]);
 
-  const caption = await generateXhsCaption({
+  const { caption, reason: captionReason, source: captionSource } = await generateXhsCaption({
     projectName,
     sellingPoints: config.sellingPoints,
     tags: config.tags,
@@ -39,6 +43,8 @@ export async function getProjectPreview(projectId: string, count: number): Promi
 
   return {
     caption,
+    captionReason,
+    captionSource,
     images: materialIds.map((id) => ({
       id,
       url: `/api/public/projects/${encodeURIComponent(projectId)}/materials/${id}/image`,

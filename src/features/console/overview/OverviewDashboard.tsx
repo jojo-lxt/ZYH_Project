@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { App, Button, DatePicker, Select, Space, Table } from "antd";
+import { App, Button, DatePicker, Select, Space, Spin, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { EChartsOption } from "echarts";
 import { useGetOverviewQuery, useGetStrategyQuery } from "@/store/consoleApi";
@@ -688,11 +688,11 @@ export function OverviewDashboard() {
     ...getRangeQuery(dateRange),
   }), [channelType, dateRange, noteType]);
   const currentProject = useAppSelector(selectConsoleCurrentProject);
-  const { data: overviewData = emptyOverviewData } = useGetOverviewQuery(
+  const { data: overviewData = emptyOverviewData, isFetching: isOverviewFetching } = useGetOverviewQuery(
     { ...overviewQuery, projectId: currentProject },
     { skip: !currentProject },
   );
-  const { data: strategyData = emptyStrategyData } = useGetStrategyQuery(
+  const { data: strategyData = emptyStrategyData, isFetching: isStrategyFetching } = useGetStrategyQuery(
     { ...strategyQuery, projectId: currentProject },
     { skip: !currentProject },
   );
@@ -705,21 +705,23 @@ export function OverviewDashboard() {
         onChannelTypeChange={setChannelType}
         onNoteTypeChange={setNoteType}
       />
-      {overviewMode === "macro" ? (
-        <OverviewPage
-          data={overviewData}
-          mode={overviewMode}
-          onDateRangeChange={setDateRange}
-          onModeChange={setOverviewMode}
-        />
-      ) : (
-        <StrategyPage
-          data={strategyData}
-          mode={overviewMode}
-          onDateRangeChange={setDateRange}
-          onModeChange={setOverviewMode}
-        />
-      )}
+      <Spin spinning={overviewMode === "macro" ? isOverviewFetching : isStrategyFetching}>
+        {overviewMode === "macro" ? (
+          <OverviewPage
+            data={overviewData}
+            mode={overviewMode}
+            onDateRangeChange={setDateRange}
+            onModeChange={setOverviewMode}
+          />
+        ) : (
+          <StrategyPage
+            data={strategyData}
+            mode={overviewMode}
+            onDateRangeChange={setDateRange}
+            onModeChange={setOverviewMode}
+          />
+        )}
+      </Spin>
     </section>
   );
 }

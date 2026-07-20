@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CloseOutlined, DeleteOutlined, DownOutlined, PlusOutlined, RightOutlined, TableOutlined } from "@ant-design/icons";
-import { App, Button, Checkbox, Input, Modal, Space } from "antd";
+import { App, Button, Checkbox, Input, Modal, Space, Spin } from "antd";
 import {
   useCreateConfigItemMutation,
   useDeleteConfigItemMutation,
@@ -81,8 +81,9 @@ export function ConfigPage({ title }: { title: string }) {
   const currentProject = useAppSelector(selectConsoleCurrentProject);
   const isSellingPoint = title.includes("卖点");
   const configKind: ConfigKind = isSellingPoint ? "selling" : "tag";
-  const { data: tagApiData = emptyConfigData } = useGetTagConfigQuery(currentProject, { skip: !currentProject });
-  const { data: sellingApiData = emptyConfigData } = useGetSellingPointConfigQuery(currentProject, { skip: !currentProject });
+  const { data: tagApiData = emptyConfigData, isFetching: isTagFetching } = useGetTagConfigQuery(currentProject, { skip: !currentProject });
+  const { data: sellingApiData = emptyConfigData, isFetching: isSellingFetching } = useGetSellingPointConfigQuery(currentProject, { skip: !currentProject });
+  const isConfigFetching = isSellingPoint ? isSellingFetching : isTagFetching;
   const [createConfigItem] = useCreateConfigItemMutation();
   const [deleteConfigItemMutation] = useDeleteConfigItemMutation();
   const [updateConfigItemMutation] = useUpdateConfigItemMutation();
@@ -273,6 +274,7 @@ export function ConfigPage({ title }: { title: string }) {
         </Space>
       </div>
 
+      <Spin spinning={isConfigFetching}>
       <div className="taxonomy-layout">
         <div className="taxonomy-list">
           {tree.map((item) => {
@@ -446,6 +448,7 @@ export function ConfigPage({ title }: { title: string }) {
           )}
         </div>
       </div>
+      </Spin>
 
       <Modal
         centered

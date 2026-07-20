@@ -81,7 +81,7 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
   const searchParams = useSearchParams();
   const isMaterialsRoute = pathname.startsWith("/materials");
   const [openKeys, setOpenKeys] = useState(["module", "config"]);
-  const { data: propertiesData } = useGetPropertiesQuery();
+  const { data: propertiesData, isLoading: isPropertiesLoading } = useGetPropertiesQuery();
   // 项目切换器按「项目 id」工作(而非项目名),后端据此隔离数据。getProperties 只返回当前用户的项目。
   const projectOptions = useMemo(
     () =>
@@ -92,10 +92,20 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
     [propertiesData?.properties],
   );
   // 当前项目 id 放在 URL 查询参数 ?project= 里,刷新后仍保持在同一个项目。
-  // 优先级:URL 里的有效项目 > 用户的第一个项目。
+  // 优先级:URL 里的有效项目 > 上次选中的项目(Redux currentProject)> 用户的第一个项目。
+  // 侧边栏/顶部导航切换路由时会丢掉 ?project=,若直接回退到「第一个项目」,多项目账号
+  // 每次跳转都会被拽回第一个项目。用 currentProject 兜底修好这一点(对所有跳转都生效),
+  // 再给下面的导航链接补上 ?project= 让 URL 始终正确、跳转无闪烁。
   const urlProject = searchParams.get("project") ?? "";
-  const urlProjectValid = projectOptions.some((item) => item.value === urlProject);
-  const selectedProject = urlProjectValid ? urlProject : propertiesData?.properties[0]?.key ?? "";
+  const isValidProject = (id: string) => projectOptions.some((item) => item.value === id);
+  const selectedProject = isValidProject(urlProject)
+    ? urlProject
+    : isValidProject(currentProject)
+      ? currentProject
+      : propertiesData?.properties[0]?.key ?? "";
+  // 给控制台内部导航链接补上当前项目参数,跳转后不丢项目、也不产生地址栏闪烁。
+  const withProject = (href: string) =>
+    selectedProject ? `${href}?project=${encodeURIComponent(selectedProject)}` : href;
 
   // 选中的项目同步进 Redux(供请求头 X-Project-Id 和 RTK 查询参数用)。
   useEffect(() => {
@@ -131,14 +141,14 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
     {
       icon: <BarChartOutlined />,
       key: "overview",
-      label: <Link href="/overview">概览</Link>,
+      label: <Link href={withProject("/overview")}>概览</Link>,
     },
     {
       children: [
         {
           icon: <PictureOutlined />,
           key: "materials",
-          label: <Link href="/materials">图片素材管理</Link>,
+          label: <Link href={withProject("/materials")}>图片素材管理</Link>,
         },
       ],
       icon: <AppstoreOutlined />,
@@ -154,12 +164,12 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
               {
                 icon: <ProjectOutlined />,
                 key: "properties",
-                label: <Link href="/properties">项目管理</Link>,
+                label: <Link href={withProject("/properties")}>项目管理</Link>,
               },
               {
                 icon: <TeamOutlined />,
                 key: "users",
-                label: <Link href="/users">用户管理</Link>,
+                label: <Link href={withProject("/users")}>用户管理</Link>,
               },
             ],
             icon: <FolderOpenOutlined />,
@@ -172,7 +182,7 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
   const topItems: MenuProps["items"] = topActions.map((item) => ({
     icon: item.icon,
     key: item.href,
-    label: <Link href={item.href}>{item.label}</Link>,
+    label: <Link href={withProject(item.href)}>{item.label}</Link>,
   }));
 
   const userItems: MenuProps["items"] = [
@@ -208,6 +218,7 @@ export function ConsoleShell({ children, currentUser }: ConsoleShellProps) {
         <Header className="console-topbar">
           <Select
             className="project-picker"
+            loading={isPropertiesLoading}
             onChange={(value) => switchProject(value)}
             options={projectOptions}
             placeholder="请选择项目"

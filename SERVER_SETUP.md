@@ -511,7 +511,7 @@ AUTH_COOKIE_SECURE 控制登录 session cookie 是否只允许 HTTPS。正式环
 APP_BASE_URL 是新建项目时自动生成的渠道二维码 / NFC 链接使用的基础域名，例如 https://your-domain.com。运行时读取，改了只需 pm2 restart content-publisher-console --update-env，不用 rebuild；不配置时会回退用请求来源域名（Nginx 反代下取 X-Forwarded-Host / X-Forwarded-Proto）。
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL 后续填小红书小程序跳转链接模板。
 NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL 后续填微信小程序跳转链接模板。
-LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 是「扫码预览」生成种草文案用的国内大模型,走 OpenAI 兼容的 /chat/completions 接口,换厂商只改这三个变量(可选 LLM_TIMEOUT_MS,默认 20000 毫秒)。腾讯云上优先考虑腾讯混元(同云内网最稳),或 DeepSeek(便宜简单)。不配置或调用失败时会用项目卖点/标签拼一段兜底文案,预览页不会空。
+LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 是「扫码预览」生成种草文案用的国内大模型,走 OpenAI 兼容的 /chat/completions 接口,换厂商只改这三个变量(可选 LLM_TIMEOUT_MS,默认 20000 毫秒)。腾讯云上优先考虑腾讯混元(同云内网最稳),或 DeepSeek(便宜简单)。不配置或调用失败时会用项目卖点/标签拼一段兜底文案,预览页不会空。想知道线上文案有没有真走 AI:看 `/preview` 响应里的 `captionSource`(`ai`=大模型;`fallback`=兜底,`captionReason` 给原因码如 `not_configured`/`network_error`/`http_xxx`/`timeout`),不用翻服务器日志。
 ```
 
 后续接入腾讯云 COS 时，再补充类似下面的变量，具体名称以后按代码实现来定：

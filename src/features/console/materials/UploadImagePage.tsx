@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { AppstoreOutlined, ArrowLeftOutlined, ArrowRightOutlined, CheckCircleOutlined, CloudUploadOutlined, TagsOutlined } from "@ant-design/icons";
-import { App, Button, Checkbox, Input, Progress, Radio, Select, Space, Steps, Tabs, Tag, Upload } from "antd";
+import { App, Button, Checkbox, Input, Progress, Radio, Select, Space, Spin, Steps, Tabs, Tag, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import { useGetMaterialUploadOptionsQuery, useUpdateMaterialTagsMutation } from "@/store/consoleApi";
 import { selectConsoleCurrentProject } from "@/store/consoleSlice";
@@ -55,6 +55,7 @@ function formatUploadSize(size: number) {
 
 function QuickTagPanel({
   attributeGroups,
+  loading,
   onComplete,
   onSkip,
   selectedAttributeTags,
@@ -64,6 +65,7 @@ function QuickTagPanel({
   setSelectedSellingTags,
 }: {
   attributeGroups: QuickTagGroup[];
+  loading: boolean;
   onComplete: () => void;
   onSkip: () => void;
   selectedAttributeTags: string[];
@@ -78,7 +80,11 @@ function QuickTagPanel({
     setSelectedTags: (tags: string[]) => void,
   ) {
     if (groups.length === 0) {
-      return <div className="quick-tag-empty">选项为空</div>;
+      return (
+        <div className="quick-tag-empty">
+          {loading ? <Spin size="small" /> : "选项为空"}
+        </div>
+      );
     }
 
     return (
@@ -156,7 +162,7 @@ function QuickTagPanel({
 export function MaterialUploadImagePage() {
   const { message } = App.useApp();
   const currentProject = useAppSelector(selectConsoleCurrentProject);
-  const { data = emptyUploadOptions } = useGetMaterialUploadOptionsQuery(currentProject, { skip: !currentProject });
+  const { data = emptyUploadOptions, isFetching: isOptionsFetching } = useGetMaterialUploadOptionsQuery(currentProject, { skip: !currentProject });
   const [updateMaterialTags] = useUpdateMaterialTagsMutation();
   const [step, setStep] = useState(0);
   const [taggingMode, setTaggingMode] = useState<"choice" | "tagging">("choice");
@@ -437,6 +443,7 @@ export function MaterialUploadImagePage() {
           </div>
           <QuickTagPanel
             attributeGroups={data.attributeGroups}
+            loading={isOptionsFetching}
             onComplete={saveUploadedTags}
             onSkip={() => setStep(2)}
             selectedAttributeTags={selectedAttributeTags}

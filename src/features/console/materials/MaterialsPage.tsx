@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { MenuOutlined, ReloadOutlined, UnorderedListOutlined } from "@ant-design/icons";
-import { App, Button, Card, Checkbox, Drawer, Input, Menu, Modal, Radio, Select, Space, Tag } from "antd";
+import { App, Button, Card, Checkbox, Drawer, Input, Menu, Modal, Radio, Select, Space, Spin, Tag } from "antd";
 import {
   useDeleteMaterialsMutation,
   useGetMaterialsQuery,
@@ -686,7 +686,7 @@ function FilterRail({
 export function MaterialsPage() {
   const { message } = App.useApp();
   const currentProject = useAppSelector(selectConsoleCurrentProject);
-  const { data: materialsData, refetch: refetchMaterials } = useGetMaterialsQuery(currentProject, { skip: !currentProject });
+  const { data: materialsData, refetch: refetchMaterials, isFetching: isMaterialsFetching } = useGetMaterialsQuery(currentProject, { skip: !currentProject });
   const { data: sellingConfigData } = useGetSellingPointConfigQuery(currentProject, { skip: !currentProject });
   const { data: tagConfigData } = useGetTagConfigQuery(currentProject, { skip: !currentProject });
   const [deleteMaterialsMutation] = useDeleteMaterialsMutation();
@@ -945,11 +945,13 @@ export function MaterialsPage() {
             />
             <Button
               icon={<ReloadOutlined />}
+              loading={isMaterialsFetching}
               onClick={resetMaterials}
               type="text"
             />
           </Space>
         </div>
+        <Spin spinning={isMaterialsFetching}>
         <div className="material-grid">
           {filteredMaterials.map((item) => {
             const sellingTags = getMaterialTags(item, "selling");
@@ -971,6 +973,7 @@ export function MaterialsPage() {
             );
           })}
         </div>
+        </Spin>
       </div>
 
       <MaterialTagEditorModal
