@@ -51,6 +51,7 @@ export function resolveDetailBaseUrl(request: Request) {
  * 用户扫码进入该页 → 选平台 → 跳转小红书 / 微信小程序预览。
  * 例:buildProjectScanUrl("https://x.com/", "a b") -> "https://x.com/p/a%20b"
  */
-export function buildProjectScanUrl(baseUrl: string, propertyId: string) {
-  return `${stripTrailingSlashes(baseUrl)}${SCAN_PATH}/${encodeURIComponent(propertyId)}`;
+export function buildProjectScanUrl(baseUrl: string, propertyId: string, channel?: string) {
+  const base = `${stripTrailingSlashes(baseUrl)}${SCAN_PATH}/${encodeURIComponent(propertyId)}`;
+  return channel ? `${base}?channel=${encodeURIComponent(channel)}` : base;
 }

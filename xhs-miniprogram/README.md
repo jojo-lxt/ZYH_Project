@@ -7,7 +7,7 @@
 ## 流程
 
 1. H5 中间页打开小红书小程序。
-2. 小程序从 query 获取 `draftId` 或 `apiUrl`。
+2. 小程序从 query 获取 `projectId` + `channel`（或中间页直接传入的完整 `apiUrl`，已带 `?channel=<身份>`）。
 3. 小程序请求草稿接口，接口需返回图片、文案、话题等内容。
 4. 用户确认内容后点击“发小红书”。
 5. `utils/xhsPublish.js` 调用小红书开放平台发布能力。
@@ -20,16 +20,16 @@
 const API_BASE_URL = "https://your-domain.example.com";
 ```
 
-如果 H5 中间页跳转小程序时传入了 `apiUrl`，小程序会优先使用 `apiUrl`。否则会请求：
+如果 H5 中间页跳转小程序时传入了 `apiUrl`（已带 `?channel=<身份>`），小程序会优先使用 `apiUrl`。否则用 `projectId` + `channel` 自己拼（`channel` 缺省 `visitor`）：
 
 ```text
-${API_BASE_URL}/api/drafts/${draftId}
+${API_BASE_URL}/api/public/projects/${projectId}/preview?channel=${channel}
 ```
 
 H5 中间页的小红书跳转模板示例：
 
 ```bash
-NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsmini://draft?draftId={draftId}&apiUrl={apiUrl}"
+NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsmini://draft?projectId={projectId}&channel={channel}&apiUrl={apiUrl}"
 ```
 
 这里的 URL 模板需要替换成小红书开放平台实际生成的小程序 URL Link。

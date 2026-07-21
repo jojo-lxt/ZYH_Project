@@ -123,7 +123,7 @@ GET  /api/drafts/[id]/images/[filename]
 - 修改 Next.js 路由、Route Handler 或配置前，先读 `node_modules/next/dist/docs/` 中的对应文档。项目根目录的 `AGENTS.md` 明确要求不要按旧版 Next.js 经验直接改。
 - 腾讯云 Ubuntu 镜像默认使用 `ubuntu` 用户登录，服务器部署路径按 `/home/ubuntu/content-publisher-console` 维护；不要直接把 SSH 用户名改成未创建的其他用户。
 - 登录 session cookie 默认在生产环境使用 `Secure`。正式部署应走 HTTPS；临时用 `http://<服务器公网IP>:3000` 测试登录时，可短暂设置 `AUTH_COOKIE_SECURE="false"` 并重启 PM2。
-- 新建项目会自动生成一条默认渠道，其二维码 / NFC 指向公开扫码中间页 `/p/<项目id>`（扫码 → 选平台 → 跳小程序）；链接域名取自 `APP_BASE_URL`（运行时读取，未配置则回退请求来源域名），渠道数据存于 `property_channels` 表。
+- 新建项目会自动生成**三条渠道**——游客(visitor)/用户(resident)/中介(agent)，各自二维码 / NFC 指向公开扫码中间页 `/p/<项目id>?channel=<身份>`（扫码 → 选平台 → 跳小程序）；渠道身份沿扫码链接传到预览接口，按身份生成贴合文案（身份+角度常量在 `src/shared/channels.ts` 与 `caption.ts` 的 `CHANNEL_ANGLES`，缺省回退 visitor）。链接域名取自 `APP_BASE_URL`（运行时读取，未配置则回退请求来源域名），渠道数据存于 `property_channels` 表（含 `channel_type`）。
 - 素材/标签/卖点/概览/策略按项目隔离（顶栏切换项目，前端经 `X-Project-Id` 头传当前项目 id，后端 `requireConsoleProject` 校验）；当前项目存 URL `?project=`，侧边栏/顶部导航链接都用 `withProject()` 带上它，跳转不会被拽回第一个项目（解析优先级：URL > 上次选中 Redux `currentProject` > 第一个项目）。
 - 数据加载态统一用 RTK Query 的 `isFetching`/`isLoading` 驱动：表格用 `<Table loading>`、非表格数据区（概览图表/素材网格/标签树）用 `<Spin>` 包裹、项目下拉用 `<Select loading>`；切换项目因缓存键变化会自动亮 loading，新增数据页请沿用这套。
 - 三级权限：**超级管理员**看/管全部；**管理员**（开发商）拥有自己的项目、管理名下员工；**员工**归某管理员，只在被分配项目（`user_project_access`）里做完整内容操作，看不到项目/用户管理页。角色存 `console_users.role`（DB `CHECK` 约束为 `超级管理员/管理员/员工`）；升级旧库见 `SERVER_SETUP.md`。

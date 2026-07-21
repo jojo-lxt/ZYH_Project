@@ -462,6 +462,45 @@ PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publi
 
 升级后:旧「员工(原游客)」的 `manager_id` 与 `user_project_access` 均为空 —— 登录后看不到任何项目,需由超级管理员/管理员在用户管理里重新分配所属管理员与项目。
 
+### 渠道拆三种(游客/用户/中介)升级
+
+项目二维码从「一条默认渠道」拆成三条(visitor/resident/agent),每条二维码扫码地址带 `?channel=<身份>`,预览时按身份注入贴合文案。已有库(每个项目当前恰有一条默认渠道)升级:
+
+```bash
+PGPASSWORD="<数据库密码>" psql -h localhost -U content_app -d content_publisher <<'SQL'
+-- 1) 先加可空列,便于回填
+ALTER TABLE property_channels ADD COLUMN IF NOT EXISTS channel_type text;
+-- 2) 已有渠道转成 visitor,并给 qr_value 补 ?channel=visitor
+UPDATE property_channels
+SET channel_type = 'visitor', label = '游客渠道',
+    qr_value = qr_value || '?channel=visitor'
+WHERE channel_type IS NULL;
+-- 3) 每个项目补 resident、agent 两条(qr_value 从 visitor 行推导)
+INSERT INTO property_channels (property_id, channel_type, label, qr_value, sort_order)
+SELECT v.property_id, 'resident', '用户渠道',
+       replace(v.qr_value, '?channel=visitor', '?channel=resident'), 1
+FROM property_channels v
+WHERE v.channel_type = 'visitor'
+  AND NOT EXISTS (SELECT 1 FROM property_channels r
+                  WHERE r.property_id = v.property_id AND r.channel_type = 'resident');
+INSERT INTO property_channels (property_id, channel_type, label, qr_value, sort_order)
+SELECT v.property_id, 'agent', '中介渠道',
+       replace(v.qr_value, '?channel=visitor', '?channel=agent'), 2
+FROM property_channels v
+WHERE v.channel_type = 'visitor'
+  AND NOT EXISTS (SELECT 1 FROM property_channels a
+                  WHERE a.property_id = v.property_id AND a.channel_type = 'agent');
+-- 4) 收紧约束
+ALTER TABLE property_channels ALTER COLUMN channel_type SET NOT NULL;
+ALTER TABLE property_channels ADD CONSTRAINT property_channels_channel_type_check
+  CHECK (channel_type IN ('visitor','resident','agent'));
+ALTER TABLE property_channels ADD CONSTRAINT property_channels_property_type_uniq
+  UNIQUE (property_id, channel_type);
+SQL
+```
+
+若某项目原本无渠道,迁移不会自动补(只有新建项目才自动生成三条)。
+
 ### 文案风格档案(可选,让小程序文案风格稳定)
 
 给某个项目填一份风格档案后,小程序预览文案会贴合范例风格(`temperature=0.5`);不填则退化为原来的通用生成。用你与国内大模型(如 DeepSeek)对话产出的**蒸馏档案**(风格 spec + 2~4 条认可范例)写入:
@@ -494,6 +533,7 @@ DATABASE_URL="postgresql://content_app:<数据库密码>@localhost:5432/content_
 AUTH_COOKIE_SECURE="true"
 APP_BASE_URL="https://<你的域名或公网IP>"
 
+# 小程序跳转链接模板,必须带 {projectId}/{channel}/{apiUrl} 三个占位符(见下方说明)
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL=""
 NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL=""
 
@@ -509,8 +549,10 @@ LLM_MODEL="deepseek-chat"
 DATABASE_URL 是后端服务连接 PostgreSQL 的地址。
 AUTH_COOKIE_SECURE 控制登录 session cookie 是否只允许 HTTPS。正式环境应保持 true；如果临时用 http://<服务器公网IP>:3000 测试登录，可短暂设为 false，测试完成后再改回 true 并重启 PM2。
 APP_BASE_URL 是新建项目时自动生成的渠道二维码 / NFC 链接使用的基础域名，例如 https://your-domain.com。运行时读取，改了只需 pm2 restart content-publisher-console --update-env，不用 rebuild；不配置时会回退用请求来源域名（Nginx 反代下取 X-Forwarded-Host / X-Forwarded-Proto）。
-NEXT_PUBLIC_XHS_MINI_PROGRAM_URL 后续填小红书小程序跳转链接模板。
-NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL 后续填微信小程序跳转链接模板。
+NEXT_PUBLIC_XHS_MINI_PROGRAM_URL / NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL 是扫码中间页跳转小红书 / 微信小程序的链接模板,填小红书 / 微信开放平台生成的实际 URL Link / Scheme。**模板必须带上三个占位符** {projectId}、{channel}、{apiUrl},中间页会把它们替换成实际值,例如:
+    xhsmini://draft?projectId={projectId}&channel={channel}&apiUrl={apiUrl}
+其中 apiUrl 是中间页拼好的完整预览接口地址(已带 ?channel=,小程序优先用它);projectId / channel 供小程序拼发布接口或在缺 apiUrl 时兜底。真实平台链接不是普通可拼接的 URL,只能靠占位符把参数放到位;若你填的是普通可解析 URL,中间页也会自动把 projectId/channel/apiUrl 作为查询参数拼上。缺了这些,小程序拿不到项目和渠道,预览会退化成默认渠道(visitor)甚至拉不到项目。
+提醒:这两个是 NEXT_PUBLIC_ 变量,编译期就烤进前端包,改了必须重新 pnpm build + 重启才生效(单独 pm2 restart 或加 --update-env 都不行)。
 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 是「扫码预览」生成种草文案用的国内大模型,走 OpenAI 兼容的 /chat/completions 接口,换厂商只改这三个变量(可选 LLM_TIMEOUT_MS,默认 20000 毫秒)。腾讯云上优先考虑腾讯混元(同云内网最稳),或 DeepSeek(便宜简单)。不配置或调用失败时会用项目卖点/标签拼一段兜底文案,预览页不会空。想知道线上文案有没有真走 AI:看 `/preview` 响应里的 `captionSource`(`ai`=大模型;`fallback`=兜底,`captionReason` 给原因码如 `not_configured`/`network_error`/`http_xxx`/`timeout`),不用翻服务器日志。
 ```
 

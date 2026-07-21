@@ -4,23 +4,31 @@ import type { CSSProperties } from "react";
 import { useCallback } from "react";
 import { BookOutlined, RightOutlined, WechatOutlined } from "@ant-design/icons";
 import { App } from "antd";
+import type { Channel } from "@/shared/channels";
 
 type ProjectPreviewBridgeProps = {
+  channel: Channel;
   projectId: string;
 };
 
 // 把 projectId + 预览接口地址塞进小程序跳转链接。
 // 模板(NEXT_PUBLIC_*_MINI_PROGRAM_URL)支持 {projectId}/{apiUrl} 占位符,否则以查询参数追加。
-function buildMiniProgramUrl(template: string, projectId: string, apiUrl: string) {
-  if (template.includes("{projectId}") || template.includes("{apiUrl}")) {
+function buildMiniProgramUrl(template: string, projectId: string, apiUrl: string, channel: string) {
+  if (
+    template.includes("{projectId}") ||
+    template.includes("{apiUrl}") ||
+    template.includes("{channel}")
+  ) {
     return template
       .replaceAll("{projectId}", encodeURIComponent(projectId))
-      .replaceAll("{apiUrl}", encodeURIComponent(apiUrl));
+      .replaceAll("{apiUrl}", encodeURIComponent(apiUrl))
+      .replaceAll("{channel}", encodeURIComponent(channel));
   }
 
   const url = new URL(template);
   url.searchParams.set("projectId", projectId);
   url.searchParams.set("apiUrl", apiUrl);
+  url.searchParams.set("channel", channel);
 
   return url.toString();
 }
@@ -84,14 +92,15 @@ const styles: Record<string, CSSProperties> = {
   arrow: { color: "#111827", fontSize: 22 },
 };
 
-export function ProjectPreviewBridge({ projectId }: ProjectPreviewBridgeProps) {
+export function ProjectPreviewBridge({ channel, projectId }: ProjectPreviewBridgeProps) {
   const { message } = App.useApp();
   const xhsTemplate = process.env.NEXT_PUBLIC_XHS_MINI_PROGRAM_URL ?? "";
   const wechatTemplate = process.env.NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL ?? "";
 
   const getApiUrl = useCallback(
-    () => `${window.location.origin}/api/public/projects/${encodeURIComponent(projectId)}/preview`,
-    [projectId],
+    () =>
+      `${window.location.origin}/api/public/projects/${encodeURIComponent(projectId)}/preview?channel=${channel}`,
+    [channel, projectId],
   );
 
   function openMiniProgram(platform: "wechat" | "xhs") {
@@ -103,7 +112,7 @@ export function ProjectPreviewBridge({ projectId }: ProjectPreviewBridgeProps) {
     }
 
     try {
-      window.location.assign(buildMiniProgramUrl(template, projectId, getApiUrl()));
+      window.location.assign(buildMiniProgramUrl(template, projectId, getApiUrl(), channel));
     } catch {
       message.error("跳转链接无效");
     }

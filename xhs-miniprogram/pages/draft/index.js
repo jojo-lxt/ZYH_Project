@@ -22,13 +22,16 @@ function normalizeUrl(url, baseUrl) {
   return `${trimSlash(baseUrl)}${url}`;
 }
 
-// 中间页跳转时会带上 projectId + apiUrl(= /api/public/projects/<id>/preview)。
+// 中间页跳转时会带上 projectId + channel + apiUrl(= /api/public/projects/<id>/preview?channel=<身份>)。
 function getPreviewContext(options) {
   const projectId = options.projectId || options.id || "";
+  // 渠道身份(游客/用户/中介):优先用中间页传来的完整 apiUrl(已带 ?channel=),
+  // 没有 apiUrl 时用 channel 自己拼,再退到 visitor。
+  const channel = options.channel || "visitor";
   const apiUrl = options.apiUrl
     ? decodeURIComponent(options.apiUrl)
     : projectId
-      ? `${trimSlash(API_BASE_URL)}/api/public/projects/${projectId}/preview`
+      ? `${trimSlash(API_BASE_URL)}/api/public/projects/${projectId}/preview?channel=${channel}`
       : "";
   // 从预览地址推出接口根域名(用于拼图片绝对地址 + 发布接口)。
   const apiBaseUrl = apiUrl.replace(/\/api\/public\/projects\/.*/, "");

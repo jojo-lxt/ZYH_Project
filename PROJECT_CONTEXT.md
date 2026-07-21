@@ -247,13 +247,13 @@ draft_images
 
 - 账号密码登录、退出、session 鉴权
 - 项目管理增删改查
-- 新建项目自动生成默认渠道二维码（写入 `property_channels`）
+- 新建项目自动生成三条渠道二维码——游客/用户/中介（写入 `property_channels`，含 `channel_type`；扫码 URL 带 `?channel=<身份>`）
 - 素材/标签/卖点/概览/策略按项目 `property_id` 隔离（顶栏切换项目,前端 `X-Project-Id` 头,后端 `requireConsoleProject`）
 - 三级权限:**超级管理员**看/管全部;**管理员**(开发商)拥有自己的项目(`properties.owner_id`)、管理自己名下员工;**员工**归某管理员(`manager_id`),只在被分配项目(`user_project_access`)里做完整内容操作,看不到「项目管理/用户管理」。当前项目存 URL `?project=`,刷新后保持
 - 建用户时不再要求填默认项目(登录后自建);上传图片可逐张自定义名称(留空用文件名)
 - `console_users`:已移除废弃的 `property` 字段;`role` 三级(`超级管理员`/`管理员`/`员工`,DB `CHECK` 约束);员工用 `manager_id` 指向所属管理员,`user_project_access` 存员工↔项目授权。管理员建员工时项目多选限自己名下、至少 1 个(服务层 `resolveEmployeeProjects` 校验子集);角色下拉按创建者身份收窄(超管可建管理员/员工,管理员只能建员工)
 - 营销阶段下拉单一来源:前端常量 `src/features/console/shared/marketingStages.ts`(`MARKETING_STAGES`),项目管理 + 图片素材三处下拉共用,改这一个文件即处处生效(不落库)
-- 扫码公开预览:`/p/<项目id>` 中间页 → 小程序按 projectId 拉「随机 5 张图 + AI 文案」(可换一批;文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底;响应带 `captionSource`(ai/fallback)+ `captionReason`(兜底原因码),前端/小程序 devtools 可直接判断这次是否走了 AI)。每项目可在 `caption_profiles` 存**文案风格档案**(风格 spec + 认可范例)注入生成、`temperature=0.5` 让风格稳定;无档案退化为原行为
+- 扫码公开预览:`/p/<项目id>?channel=<身份>` 中间页 → 小程序按 projectId + channel 拉「随机 5 张图 + 贴合身份的 AI 文案」(三渠道 visitor/resident/agent;身份沿链接传到 `/preview`,`parseChannel` 规整后经 `getProjectPreview(id,count,channel)` 注入 `CHANNEL_ANGLES[channel]`,响应带 `captionChannel`,缺省回退 visitor;可换一批;文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底;响应带 `captionSource`(ai/fallback)+ `captionReason`(兜底原因码))。每项目可在 `caption_profiles` 存**文案风格档案**(风格 spec + 认可范例)叠加在身份角度之上、`temperature=0.5` 让风格稳定;无档案退化为原行为
 - 发布存档:小程序确认发布写 `publish_records`（只存 material_ids 引用 + 文案 + 发布人/渠道,不复制图片字节）
 - 用户管理增删改查
 - 图片上传入库，原图存入 `material_files`
@@ -273,7 +273,7 @@ draft_images
 - 「从素材生成内容」已改为扫码公开预览(随机取图 + AI 文案),但后台还没有「发布记录查看 / 渠道增删改」的管理界面
 - 小程序已接入预览接口 + 发布存档,但「真正写入小红书草稿页」仍未接入(`xhs-miniprogram/utils/xhsPublish.js` 是占位);小程序改动需在小红书/微信 IDE 里自测
 - `/materials/upload-video` 仍是占位页
-- 项目渠道二维码读取 `property_channels`；新建项目时会自动生成一条默认渠道，但仍没有后续增删改渠道的管理入口
+- 项目渠道二维码读取 `property_channels`；新建项目自动生成三条渠道（游客/用户/中介），但仍没有后续增删改渠道的管理入口
 
 中优先级：
 
@@ -362,7 +362,7 @@ xhs-miniprogram/utils/xhsPublish.js
 
 当前小程序行为：
 
-- 从 query 获取 `draftId` 或 `apiUrl`
+- 从 query 获取 `projectId` + `channel`（或中间页直接传入的完整 `apiUrl`，已带 `?channel=`）；缺 `apiUrl` 时用 `projectId`+`channel` 拼 `/preview?channel=`，`channel` 缺省 `visitor`
 - 请求草稿接口
 - 展示图片、文案、话题
 - 点击“发小红书”后调用 `openXhsDraftPublisher`
@@ -478,7 +478,7 @@ AUTH_COOKIE_SECURE="true"
 
 ### 新建项目的二维码链接域名
 
-新建项目时会在 `property_channels` 自动插入一条「默认渠道」。二维码 / NFC 指向**公开扫码中间页** `<base>/p/<项目id>`(用户扫码 → 选平台 → 跳小程序;由 `buildProjectScanUrl` 生成),`<base>` 的来源优先级:
+新建项目时会在 `property_channels` 自动插入**三条渠道**(游客/用户/中介,`channel_type` = visitor/resident/agent)。三个二维码 / NFC 分别指向**公开扫码中间页** `<base>/p/<项目id>?channel=<身份>`(用户扫码 → 选平台 → 跳小程序;由 `buildProjectScanUrl(base, id, channel)` 生成),`<base>` 的来源优先级:
 
 1. `APP_BASE_URL` 环境变量（推荐，例如 `https://your-domain.com`；运行时读取，改了只需 `pm2 restart content-publisher-console --update-env`，不用 rebuild）
 2. 未配置时回退到请求来源域名（Nginx 反代下取 `X-Forwarded-Host` / `X-Forwarded-Proto`，否则 `Host`）

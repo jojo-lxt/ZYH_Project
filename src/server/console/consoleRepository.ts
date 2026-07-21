@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { hashPassword } from "@/server/auth/password";
 import { buildProjectScanUrl } from "@/server/console/propertyDetailUrl";
+import { CHANNEL_TYPES } from "@/shared/channels";
 import { query, queryOne, queryRows, withTransaction } from "@/server/db";
 import type {
   ConfigTreeItem,
@@ -1148,14 +1149,16 @@ export async function createProperty(
       return null;
     }
 
-    // 新建项目时自动生成一条默认渠道,详情页据此渲染二维码 / NFC 链接。
-    await client.query(
-      `
-        INSERT INTO property_channels (property_id, label, qr_value, sort_order)
-        VALUES ($1, $2, $3, 0)
-      `,
-      [id, "默认渠道", buildProjectScanUrl(detailBaseUrl, id)],
-    );
+    // 新建项目自动生成三条渠道(游客/用户/中介),各自二维码扫码地址带上 channel。
+    for (const [index, { value, label }] of CHANNEL_TYPES.entries()) {
+      await client.query(
+        `
+          INSERT INTO property_channels (property_id, channel_type, label, qr_value, sort_order)
+          VALUES ($1, $2, $3, $4, $5)
+        `,
+        [id, value, label, buildProjectScanUrl(detailBaseUrl, id, value), index],
+      );
+    }
 
     return mapProperty(row);
   });

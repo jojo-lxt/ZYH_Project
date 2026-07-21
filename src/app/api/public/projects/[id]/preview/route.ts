@@ -1,4 +1,5 @@
 import { getProjectPreview } from "@/server/public/publicService";
+import { parseChannel } from "@/shared/channels";
 
 export const runtime = "nodejs";
 
@@ -20,8 +21,10 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params;
-  const count = parseCount(new URL(request.url).searchParams.get("count"));
-  const preview = await getProjectPreview(id, count);
+  const url = new URL(request.url);
+  const count = parseCount(url.searchParams.get("count"));
+  const channel = parseChannel(url.searchParams.get("channel"));
+  const preview = await getProjectPreview(id, count, channel);
 
   if (!preview) {
     return Response.json({ error: "项目不存在" }, { status: 404 });

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Channel } from "@/shared/channels";
 
 // 小红书种草文案生成。走 OpenAI 兼容接口调用国内大模型(DeepSeek / 通义千问 / 混元 / 智谱 GLM / Kimi 等),
 // 厂商用环境变量配置(LLM_BASE_URL / LLM_API_KEY / LLM_MODEL),换家只改 env、不改代码。
@@ -28,6 +29,21 @@ export type CaptionInput = {
   // 每项目的文案风格档案:注入后让文案「风格稳定、内容有变化」。缺省时行为与原来一致。
   styleSpec?: string;
   examples?: XhsCaption[];
+  // 渠道身份(即发布者身份):注入对应写作角度。缺省时行为与原来一致。
+  channel?: Channel;
+};
+
+// 每种渠道身份的写作目标/角度,注入 system prompt。风格档案(style_spec/examples)会叠加在其上。
+const CHANNEL_ANGLES: Record<Channel, string> = {
+  visitor:
+    "这篇笔记以「刚到售楼部看完房的准业主」第一人称口吻来写——你是还在看房、被这个盘打动的人,在小红书安利给同样在看房的姐妹。" +
+    "目标:种草、激发兴趣、引导大家去看房或留资;主打卖点、生活方式、环境和户型亮点,制造「我也想去看看」的冲动。",
+  resident:
+    "这篇笔记以「已经买房、住进来的业主」第一人称口吻来写——你是真实住户,在小红书分享入住后的生活。" +
+    "目标:晒真实居住体验、增强归属感、带动老带新;讲社区、物业、邻里和生活细节,真实可信、不要广告腔,自然带出「推荐给想买房的朋友」。",
+  agent:
+    "这篇笔记以「卖这个盘的置业顾问/中介」口吻来写——你是专业经纪人,在小红书给潜在客户介绍这套房。" +
+    "目标:专业讲清卖点、帮客户决策、约看房;卖点清单式、信息密度高(户型、价格区间、配套、学区、交通、客户常问点),结构清晰,可带约看话术。",
 };
 
 function trimTrailingSlashes(value: string) {
@@ -71,11 +87,15 @@ function buildMessages(input: CaptionInput) {
         )
         .join("\n---\n")
     : "";
+  const channelBlock = input.channel
+    ? `\n\n本篇发布者身份与写作目标(务必贴合):\n${CHANNEL_ANGLES[input.channel]}`
+    : "";
   const system =
     "你是资深小红书房产种草文案写手。用口语化、有网感、带 emoji 的风格,为地产项目写一篇简短笔记。" +
     "只输出 JSON,不要额外解释或代码块围栏。JSON 字段:" +
     "title(不超过 20 字的标题)、body(正文,150 字以内,可含换行和 emoji)、" +
     "topics(3-6 个话题词字符串数组,不带 # 号)。" +
+    channelBlock +
     styleBlock +
     exampleBlock;
   const user = [
