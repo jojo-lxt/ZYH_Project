@@ -93,7 +93,7 @@ function buildMessages(input: CaptionInput) {
   const system =
     "你是资深小红书房产种草文案写手。用口语化、有网感、带 emoji 的风格,为地产项目写一篇简短笔记。" +
     "只输出 JSON,不要额外解释或代码块围栏。JSON 字段:" +
-    "title(不超过 20 字的标题)、body(正文,150 字以内,可含换行和 emoji)、" +
+    "title(不超过 20 字的标题)、body(可含换行和 emoji)、" +
     "topics(3-6 个话题词字符串数组,不带 # 号)。" +
     channelBlock +
     styleBlock +
