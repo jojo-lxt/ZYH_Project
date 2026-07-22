@@ -9,7 +9,15 @@ import {
   getRandomMaterialIds,
 } from "@/server/public/publicRepository";
 
-export type ProjectPreview = {
+// 图片预览(快):只查 DB 随机图,不调大模型。小程序先拿它秒显图片,文案再异步补。
+// 项目不存在返回 null(路由据此 404)。
+export type ProjectImages = {
+  images: Array<{ id: number; url: string }>;
+  projectName: string;
+};
+
+// AI 文案(慢):单独一次请求,阻塞的只是文案本身,不再拖住图片展示。
+export type ProjectCaption = {
   caption: XhsCaption;
   // 文案来源:ai=大模型生成,fallback=兜底(卖点/标签拼接);兜底时 captionReason 给粗粒度原因码。
   // 供前端 / 小程序 devtools 直接看这次文案是不是真走了 AI(线上不看日志也能自查)。
@@ -17,25 +25,42 @@ export type ProjectPreview = {
   captionChannel: Channel;
   captionReason?: string;
   captionSource: CaptionSource;
-  images: Array<{ id: number; url: string }>;
-  projectName: string;
 };
 
-// 扫码中间页 / 小程序用的公开预览:随机取该项目 count 张图 + AI 文案。
-// 项目不存在返回 null(路由据此 404)。
-export async function getProjectPreview(
+// 扫码中间页 / 小程序用的公开图片预览:随机取该项目 count 张图。
+export async function getProjectImages(
   projectId: string,
   count: number,
-  channel: Channel,
-): Promise<ProjectPreview | null> {
+): Promise<ProjectImages | null> {
   const projectName = await getProjectName(projectId);
 
   if (projectName === null) {
     return null;
   }
 
-  const [materialIds, config, profile] = await Promise.all([
-    getRandomMaterialIds(projectId, count),
+  const materialIds = await getRandomMaterialIds(projectId, count);
+
+  return {
+    images: materialIds.map((id) => ({
+      id,
+      url: `/api/public/projects/${encodeURIComponent(projectId)}/materials/${id}/image`,
+    })),
+    projectName,
+  };
+}
+
+// 单独生成贴合渠道身份的 AI 文案:图片无关,只需 projectId + channel。
+export async function getProjectCaption(
+  projectId: string,
+  channel: Channel,
+): Promise<ProjectCaption | null> {
+  const projectName = await getProjectName(projectId);
+
+  if (projectName === null) {
+    return null;
+  }
+
+  const [config, profile] = await Promise.all([
     getProjectConfigNames(projectId),
     getCaptionProfile(projectId),
   ]);
@@ -49,17 +74,7 @@ export async function getProjectPreview(
     channel,
   });
 
-  return {
-    caption,
-    captionChannel: channel,
-    captionReason,
-    captionSource,
-    images: materialIds.map((id) => ({
-      id,
-      url: `/api/public/projects/${encodeURIComponent(projectId)}/materials/${id}/image`,
-    })),
-    projectName,
-  };
+  return { caption, captionChannel: channel, captionReason, captionSource };
 }
 
 export type PublishInput = {

@@ -87,6 +87,15 @@
   padding: 44rpx 38rpx;
 }
 
+.caption-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 520rpx;
+  color: #a8a29e;
+  font-size: 30rpx;
+}
+
 textarea {
   width: 100%;
   min-height: 520rpx;

@@ -128,7 +128,7 @@ GET  /api/drafts/[id]/images/[filename]
 - 数据加载态统一用 RTK Query 的 `isFetching`/`isLoading` 驱动：表格用 `<Table loading>`、非表格数据区（概览图表/素材网格/标签树）用 `<Spin>` 包裹、项目下拉用 `<Select loading>`；切换项目因缓存键变化会自动亮 loading，新增数据页请沿用这套。
 - 三级权限：**超级管理员**看/管全部；**管理员**（开发商）拥有自己的项目、管理名下员工；**员工**归某管理员，只在被分配项目（`user_project_access`）里做完整内容操作，看不到项目/用户管理页。角色存 `console_users.role`（DB `CHECK` 约束为 `超级管理员/管理员/员工`）；升级旧库见 `SERVER_SETUP.md`。
 - 营销阶段下拉的唯一来源是前端常量 `src/features/console/shared/marketingStages.ts`，项目管理与图片素材共用，改这一个文件即处处生效（不落库）。
-- 公开接口 `GET /api/public/projects/[id]/preview` 供扫码中间页 / 小程序拉「随机 5 张图 + AI 文案」，再调一次即刷新换一批；文案走 OpenAI 兼容的国内大模型（`LLM_*` 环境变量），未配置或失败则用卖点/标签拼兜底文案。响应带 `captionSource`（`ai`/`fallback`）和兜底原因码 `captionReason`（如 `not_configured`/`network_error`/`http_xxx`），可在 devtools 直接看这次是否走了 AI，线上不用翻日志。每个项目可在 `caption_profiles` 表填一份风格档案（风格 spec + 认可范例）注入生成、`temperature=0.5` 让风格稳定，维护 SQL 见 `SERVER_SETUP.md`。
+- 公开接口拆成两段，让图片秒显、慢的文案不拖住整页：`GET /api/public/projects/[id]/preview` 只返回「随机 5 张图」（不调大模型，快）；`GET /api/public/projects/[id]/caption?channel=<身份>` 单独返回「AI 文案」（小程序拿到图片后再异步拉，卡片先显示「生成中」占位）。再调一次即刷新换一批。文案走 OpenAI 兼容的国内大模型（`LLM_*` 环境变量），未配置或失败则用卖点/标签拼兜底文案。`/caption` 响应带 `captionSource`（`ai`/`fallback`）和兜底原因码 `captionReason`（如 `not_configured`/`parse_error`/`network_error`/`http_xxx`），可在 devtools 直接看这次是否走了 AI，线上不用翻日志。每个项目可在 `caption_profiles` 表填一份风格档案（风格 spec + 认可范例）注入生成、`temperature=0.5` 让风格稳定，维护 SQL 见 `SERVER_SETUP.md`。
 - 视觉主题主要集中在 `src/app/providers.tsx`、`src/app/globals.css` 和 `src/features/console/overview/OverviewDashboard.tsx` 的 ECharts 配色中，后续新增页面应沿用这套主题。
 - `src/shared/mock/consoleData.ts` 仍保留作为早期 mock/兜底数据，不代表当前主要数据来源。
 - 小程序发布能力依赖平台官方开放能力和审核权限，普通 H5 无法绕过平台限制直接写入真实小红书草稿页。

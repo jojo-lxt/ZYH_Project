@@ -185,16 +185,32 @@ export async function generateXhsCaption(input: CaptionInput): Promise<CaptionRe
     }
 
     const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
+      choices?: Array<{ finish_reason?: string; message?: { content?: string } }>;
+      usage?: { completion_tokens?: number };
     };
-    const content = data.choices?.[0]?.message?.content;
+    const choice = data.choices?.[0];
+    const content = choice?.message?.content;
+
+    // 【诊断】空内容/解析失败时,额外打一行关键信号,帮助判定 parse_error 的真正成因:
+    // finish_reason=length → 被 max_tokens 截断(JSON 不完整);completion_tokens 贴近 max_tokens 同样指向截断;
+    // content 很短/为 {} → 模型退化空输出。content 是模型生成的文案(非密钥),截断脱敏后安全可打。
+    function failWithDiag(reason: string): CaptionResult {
+      const snippet = (content ?? "").replace(/\s+/g, " ").slice(0, 200);
+      console.warn(
+        `[caption] 诊断(${reason}): finish_reason=${choice?.finish_reason ?? "?"} ` +
+          `completion_tokens=${data.usage?.completion_tokens ?? "?"} ` +
+          `content_len=${(content ?? "").length} head="${snippet}"`,
+      );
+      return fail(reason);
+    }
+
     if (!content) {
-      return fail("empty_content");
+      return failWithDiag("empty_content");
     }
 
     const parsed = parseCaption(content, input);
     if (!parsed) {
-      return fail("parse_error");
+      return failWithDiag("parse_error");
     }
 
     return { caption: parsed, source: "ai" };

@@ -553,7 +553,7 @@ NEXT_PUBLIC_XHS_MINI_PROGRAM_URL / NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL 是扫码
     xhsmini://draft?projectId={projectId}&channel={channel}&apiUrl={apiUrl}
 其中 apiUrl 是中间页拼好的完整预览接口地址(已带 ?channel=,小程序优先用它);projectId / channel 供小程序拼发布接口或在缺 apiUrl 时兜底。真实平台链接不是普通可拼接的 URL,只能靠占位符把参数放到位;若你填的是普通可解析 URL,中间页也会自动把 projectId/channel/apiUrl 作为查询参数拼上。缺了这些,小程序拿不到项目和渠道,预览会退化成默认渠道(visitor)甚至拉不到项目。
 提醒:这两个是 NEXT_PUBLIC_ 变量,编译期就烤进前端包,改了必须重新 pnpm build + 重启才生效(单独 pm2 restart 或加 --update-env 都不行)。
-LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 是「扫码预览」生成种草文案用的国内大模型,走 OpenAI 兼容的 /chat/completions 接口,换厂商只改这三个变量(可选 LLM_TIMEOUT_MS,默认 20000 毫秒)。腾讯云上优先考虑腾讯混元(同云内网最稳),或 DeepSeek(便宜简单)。不配置或调用失败时会用项目卖点/标签拼一段兜底文案,预览页不会空。想知道线上文案有没有真走 AI:看 `/preview` 响应里的 `captionSource`(`ai`=大模型;`fallback`=兜底,`captionReason` 给原因码如 `not_configured`/`network_error`/`http_xxx`/`timeout`),不用翻服务器日志。
+LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 是「扫码预览」生成种草文案用的国内大模型,走 OpenAI 兼容的 /chat/completions 接口,换厂商只改这三个变量(可选 LLM_TIMEOUT_MS,默认 20000 毫秒)。腾讯云上优先考虑腾讯混元(同云内网最稳),或 DeepSeek(便宜简单)。不配置或调用失败时会用项目卖点/标签拼一段兜底文案,预览页不会空。想知道线上文案有没有真走 AI:看 `/caption` 响应里的 `captionSource`(`ai`=大模型;`fallback`=兜底,`captionReason` 给原因码如 `not_configured`/`parse_error`/`network_error`/`http_xxx`/`timeout`),不用翻服务器日志。注:AI 文案已从 `/preview` 拆到独立的 `/caption` 接口(小程序先秒显图片、再异步拉文案)。
 ```
 
 后续接入腾讯云 COS 时，再补充类似下面的变量，具体名称以后按代码实现来定：

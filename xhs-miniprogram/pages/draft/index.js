@@ -67,6 +67,8 @@ Page({
   data: {
     apiBaseUrl: "",
     apiUrl: "",
+    // 图片已就位、AI 文案还在生成中:文案卡片显示「生成中」占位,复制/发布按钮先禁用。
+    captionLoading: false,
     currentImage: null,
     currentImageIndex: 0,
     draft: null,
@@ -94,6 +96,9 @@ Page({
       return;
     }
 
+    // 每次加载递增序号:图片/文案是两个异步请求,靠它丢弃「换一批」时上一批的过期响应,
+    // 避免慢到的旧文案覆盖到新的一批上。
+    const seq = (this.loadSeq = (this.loadSeq || 0) + 1);
     this.setData(isRefresh ? { refreshing: true } : { loading: true });
 
     try {
@@ -101,15 +106,27 @@ Page({
         method: "GET",
         url: this.data.apiUrl,
       });
+
+      if (seq !== this.loadSeq) {
+        return;
+      }
+
       const payload = response.data || {};
 
       if (!payload.images) {
         throw new Error(payload.error || "项目不存在");
       }
 
+      // 图片先显示,文案单独异步拉,不阻塞图片。
       this.showDraft(toDraft(payload, this.data.apiBaseUrl));
+      this.loadCaption(seq);
     } catch (error) {
+      if (seq !== this.loadSeq) {
+        return;
+      }
+
       this.setData({
+        captionLoading: false,
         error: error.message || "加载失败",
         loading: false,
         refreshing: false,
@@ -117,8 +134,52 @@ Page({
     }
   },
 
+  // 图片就绪后单独拉 AI 文案。慢的部分只影响文案卡片,不影响图片浏览。
+  async loadCaption(seq) {
+    const captionUrl = this.data.apiUrl.replace(/\/preview(\?|$)/, "/caption$1");
+
+    try {
+      const response = await request({ method: "GET", url: captionUrl });
+
+      if (seq !== this.loadSeq) {
+        return;
+      }
+
+      const caption = (response.data && response.data.caption) || {};
+      const title = caption.title || "";
+      const body = caption.body || "";
+      const topics = Array.isArray(caption.topics) ? caption.topics : [];
+      const draft = this.data.draft;
+
+      if (!draft) {
+        return;
+      }
+
+      this.setData({
+        captionLoading: false,
+        draft: {
+          ...draft,
+          body,
+          caption: [title, body].filter(Boolean).join("\n\n"),
+          tags: topics,
+          title,
+          topics,
+        },
+      });
+    } catch (error) {
+      if (seq !== this.loadSeq) {
+        return;
+      }
+
+      this.setData({ captionLoading: false });
+      showToast("文案生成失败,可点换一批重试");
+    }
+  },
+
   showDraft(draft) {
     this.setData({
+      // 文案随后异步补齐,先进入「生成中」态。
+      captionLoading: true,
       currentImage: draft.selectedImages[0] || null,
       currentImageIndex: 0,
       draft,
@@ -128,7 +189,7 @@ Page({
     });
   },
 
-  // 换一批:重新拉预览,后端随机取新的一组图 + 生成新文案。
+  // 换一批:重新拉一组随机图 + 新文案。序号机制保证上一批的慢文案不会串台。
   refreshPreview() {
     if (this.data.refreshing || this.data.loading) {
       return;
@@ -153,7 +214,7 @@ Page({
   },
 
   async copyCaption() {
-    if (!this.data.draft || !this.data.draft.caption) {
+    if (this.data.captionLoading || !this.data.draft || !this.data.draft.caption) {
       return;
     }
 
@@ -164,7 +225,8 @@ Page({
   async openPublisher() {
     const draft = this.data.draft;
 
-    if (!draft) {
+    // 文案还没生成完就不放行,避免把空文案带进发布记录。
+    if (!draft || this.data.captionLoading) {
       return;
     }
 

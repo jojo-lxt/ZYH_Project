@@ -154,7 +154,8 @@ POST /api/auth/login
 POST /api/auth/logout
 GET  /api/auth/me
 
-GET  /api/public/projects/[id]/preview                随机5张图 + AI文案(公开,扫码用)
+GET  /api/public/projects/[id]/preview                随机5张图(公开,扫码用;快,不含文案)
+GET  /api/public/projects/[id]/caption                AI文案(公开,按channel;慢,图片拿到后异步单独拉)
 GET  /api/public/projects/[id]/materials/[mid]/image  素材图(公开,扫码用)
 POST /api/public/projects/[id]/publish                发布存档(公开,小程序调)
 
@@ -253,7 +254,7 @@ draft_images
 - 建用户时不再要求填默认项目(登录后自建);上传图片可逐张自定义名称(留空用文件名)
 - `console_users`:已移除废弃的 `property` 字段;`role` 三级(`超级管理员`/`管理员`/`员工`,DB `CHECK` 约束);员工用 `manager_id` 指向所属管理员,`user_project_access` 存员工↔项目授权。管理员建员工时项目多选限自己名下、至少 1 个(服务层 `resolveEmployeeProjects` 校验子集);角色下拉按创建者身份收窄(超管可建管理员/员工,管理员只能建员工)
 - 营销阶段下拉单一来源:前端常量 `src/features/console/shared/marketingStages.ts`(`MARKETING_STAGES`),项目管理 + 图片素材三处下拉共用,改这一个文件即处处生效(不落库)
-- 扫码公开预览:`/p/<项目id>?channel=<身份>` 中间页 → 小程序按 projectId + channel 拉「随机 5 张图 + 贴合身份的 AI 文案」(三渠道 visitor/resident/agent;身份沿链接传到 `/preview`,`parseChannel` 规整后经 `getProjectPreview(id,count,channel)` 注入 `CHANNEL_ANGLES[channel]`,响应带 `captionChannel`,缺省回退 visitor;可换一批;文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底;响应带 `captionSource`(ai/fallback)+ `captionReason`(兜底原因码))。每项目可在 `caption_profiles` 存**文案风格档案**(风格 spec + 认可范例)叠加在身份角度之上、`temperature=0.5` 让风格稳定;无档案退化为原行为
+- 扫码公开预览(图片/文案两段式,让图片秒显、慢的文案不拖住整页):`/p/<项目id>?channel=<身份>` 中间页 → 小程序先调 `/preview`(经 `getProjectImages(id,count)`)拿「随机 5 张图」立即展示,再把 `apiUrl` 的 `/preview` 换成 `/caption` 异步单独拉「贴合身份的 AI 文案」(文案卡片先显示「生成中」占位)。三渠道 visitor/resident/agent;身份沿链接传到 `/caption`,`parseChannel` 规整后经 `getProjectCaption(id,channel)` 注入 `CHANNEL_ANGLES[channel]`,响应带 `captionChannel`,缺省回退 visitor;可换一批(靠 `loadSeq` 递增序号丢弃上一批过期文案,避免串台);文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底;`/caption` 响应带 `captionSource`(ai/fallback)+ `captionReason`(兜底原因码)。每项目可在 `caption_profiles` 存**文案风格档案**(风格 spec + 认可范例)叠加在身份角度之上、`temperature=0.5` 让风格稳定;无档案退化为原行为
 - 发布存档:小程序确认发布写 `publish_records`（只存 material_ids 引用 + 文案 + 发布人/渠道,不复制图片字节）
 - 用户管理增删改查
 - 图片上传入库，原图存入 `material_files`
@@ -363,8 +364,8 @@ xhs-miniprogram/utils/xhsPublish.js
 当前小程序行为：
 
 - 从 query 获取 `projectId` + `channel`（或中间页直接传入的完整 `apiUrl`，已带 `?channel=`）；缺 `apiUrl` 时用 `projectId`+`channel` 拼 `/preview?channel=`，`channel` 缺省 `visitor`
-- 请求草稿接口
-- 展示图片、文案、话题
+- 两段式请求：先 `GET /preview` 拿随机图立即展示，再 `GET /caption`（由 `apiUrl` 的 `/preview` 替换为 `/caption`）异步拿文案；文案未回前卡片显示「AI 文案生成中…」占位，复制/发布按钮禁用
+- 展示图片、文案、话题；「换一批」重新拉两段，靠 `loadSeq` 序号丢弃上一批过期文案
 - 点击“发小红书”后调用 `openXhsDraftPublisher`
 - 若平台发布 API 不存在，则复制文案并弹出“发布能力待接入”
 
