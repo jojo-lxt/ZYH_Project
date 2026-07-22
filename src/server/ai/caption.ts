@@ -93,7 +93,7 @@ function buildMessages(input: CaptionInput) {
   const system =
     "你是资深小红书房产种草文案写手。用口语化、有网感、带 emoji 的风格,为地产项目写一篇简短笔记。" +
     "只输出 JSON,不要额外解释或代码块围栏。JSON 字段:" +
-    "title(不超过 20 字的标题)、body(可含换行和 emoji)、" +
+    "title(不超过 20 字的标题)、body(一定要符合现在小红书的爆款图文格式，可含换行和 emoji，字数在500字左右)、" +
     "topics(3-6 个话题词字符串数组,不带 # 号)。" +
     channelBlock +
     styleBlock +
@@ -147,6 +147,11 @@ export async function generateXhsCaption(input: CaptionInput): Promise<CaptionRe
   const baseUrl = process.env.LLM_BASE_URL?.trim();
   const apiKey = process.env.LLM_API_KEY?.trim();
   const model = process.env.LLM_MODEL?.trim();
+  // 思考模式开关(仅 DeepSeek V4 等「混合思考」模型支持)。这个结构化 JSON 任务不需要推理,
+  // 关掉能省时(问题:文案慢)+ 把 token 预算全留给正文(问题:思考吃掉预算 → JSON 被截断 → parse_error)。
+  // 只在显式配 LLM_THINKING=disabled/enabled 时才下发该字段,不配则不传——保持「换厂商只改 env、不改代码」,
+  // 避免给不认识 thinking 参数的厂商(通义/混元/Kimi 等)发未知字段导致 400。
+  const thinking = process.env.LLM_THINKING?.trim();
 
   // 没配大模型就直接兜底(本地/未接入时也能跑通预览)。这是预期内的、不算失败,不打日志。
   if (!baseUrl || !apiKey || !model) {
@@ -166,11 +171,16 @@ export async function generateXhsCaption(input: CaptionInput): Promise<CaptionRe
   try {
     const response = await fetch(`${trimTrailingSlashes(baseUrl)}/chat/completions`, {
       body: JSON.stringify({
-        max_tokens: 800,
+        // 2000 足够写完「标题+200~300字正文+6个话题」的 JSON,并给思考模式(若开着)留出余量。
+        // 800 曾偏小:实测思考模式先吃掉 ~550 token 推理,剩下不够写完正文 → JSON 截断 → parse_error。
+        max_tokens: 2000,
         messages: buildMessages(input),
         model,
         response_format: { type: "json_object" },
         temperature: 0.5,
+        ...(thinking === "enabled" || thinking === "disabled"
+          ? { thinking: { type: thinking } }
+          : {}),
       }),
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -191,26 +201,26 @@ export async function generateXhsCaption(input: CaptionInput): Promise<CaptionRe
     const choice = data.choices?.[0];
     const content = choice?.message?.content;
 
-    // 【诊断】空内容/解析失败时,额外打一行关键信号,帮助判定 parse_error 的真正成因:
-    // finish_reason=length → 被 max_tokens 截断(JSON 不完整);completion_tokens 贴近 max_tokens 同样指向截断;
-    // content 很短/为 {} → 模型退化空输出。content 是模型生成的文案(非密钥),截断脱敏后安全可打。
-    function failWithDiag(reason: string): CaptionResult {
-      const snippet = (content ?? "").replace(/\s+/g, " ").slice(0, 200);
+    // finish_reason=length = 被 max_tokens 截断,JSON 必然不完整。单列 truncated 原因码(比笼统的 parse_error
+    // 更精确),日志点明「调大 max_tokens / 关思考」,便于日后一眼定位;正文超长或思考吃掉预算时会走到这里。
+    if (choice?.finish_reason === "length") {
       console.warn(
-        `[caption] 诊断(${reason}): finish_reason=${choice?.finish_reason ?? "?"} ` +
-          `completion_tokens=${data.usage?.completion_tokens ?? "?"} ` +
-          `content_len=${(content ?? "").length} head="${snippet}"`,
+        `[caption] 输出被 max_tokens 截断(completion_tokens=${data.usage?.completion_tokens ?? "?"}),` +
+          "请调大 max_tokens 或设 LLM_THINKING=disabled 关思考;本次改用兜底文案",
       );
-      return fail(reason);
+      return fail("truncated");
     }
 
     if (!content) {
-      return failWithDiag("empty_content");
+      return fail("empty_content");
     }
 
     const parsed = parseCaption(content, input);
     if (!parsed) {
-      return failWithDiag("parse_error");
+      // 非截断却解析失败:多为非 JSON / 空壳输出。打一行内容头(文案非密钥,脱敏截断)辅助排查。
+      const snippet = content.replace(/\s+/g, " ").slice(0, 120);
+      console.warn(`[caption] 解析失败: content_len=${content.length} head="${snippet}"`);
+      return fail("parse_error");
     }
 
     return { caption: parsed, source: "ai" };
