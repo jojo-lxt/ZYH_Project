@@ -38,9 +38,18 @@ function showToast(title, icon = "none") {
 function showModal(options) {
   const platform = getPlatform();
 
-  if (platform && platform.showModal) {
-    platform.showModal(options);
-  }
+  return new Promise((resolve) => {
+    if (!platform || !platform.showModal) {
+      resolve({ cancel: true, confirm: false });
+      return;
+    }
+
+    platform.showModal({
+      ...options,
+      fail: () => resolve({ cancel: true, confirm: false }),
+      success: resolve,
+    });
+  });
 }
 
 function setClipboardData(data) {
@@ -60,9 +69,97 @@ function setClipboardData(data) {
   });
 }
 
+function downloadFile(options) {
+  const platform = getPlatform();
+
+  return new Promise((resolve, reject) => {
+    if (!platform || !platform.downloadFile) {
+      reject(new Error("当前运行环境不支持下载图片"));
+      return;
+    }
+
+    platform.downloadFile({
+      ...options,
+      fail: reject,
+      success: resolve,
+    });
+  });
+}
+
+function saveImageToPhotosAlbum(filePath) {
+  const platform = getPlatform();
+
+  return new Promise((resolve, reject) => {
+    if (!platform || !platform.saveImageToPhotosAlbum) {
+      reject(new Error("当前运行环境不支持保存到相册"));
+      return;
+    }
+
+    platform.saveImageToPhotosAlbum({
+      filePath,
+      fail: reject,
+      success: resolve,
+    });
+  });
+}
+
+function getSetting() {
+  const platform = getPlatform();
+
+  return new Promise((resolve, reject) => {
+    if (!platform || !platform.getSetting) {
+      reject(new Error("当前运行环境不支持获取授权状态"));
+      return;
+    }
+
+    platform.getSetting({
+      fail: reject,
+      success: resolve,
+    });
+  });
+}
+
+function authorize(scope) {
+  const platform = getPlatform();
+
+  return new Promise((resolve, reject) => {
+    if (!platform || !platform.authorize) {
+      reject(new Error("当前运行环境不支持申请授权"));
+      return;
+    }
+
+    platform.authorize({
+      scope,
+      fail: reject,
+      success: resolve,
+    });
+  });
+}
+
+function openSetting() {
+  const platform = getPlatform();
+
+  return new Promise((resolve, reject) => {
+    if (!platform || !platform.openSetting) {
+      reject(new Error("当前运行环境不支持打开设置页"));
+      return;
+    }
+
+    platform.openSetting({
+      fail: reject,
+      success: resolve,
+    });
+  });
+}
+
 module.exports = {
+  authorize,
+  downloadFile,
   getPlatform,
+  getSetting,
+  openSetting,
   request,
+  saveImageToPhotosAlbum,
   setClipboardData,
   showModal,
   showToast,

@@ -13,7 +13,7 @@
    - 再把 `apiUrl` 的 `/preview` 换成 `/caption`（`GET /caption?channel=<身份>`）异步拿「文案 + 话题」，未回前文案卡片显示「AI 文案生成中…」占位、复制/发布按钮禁用。
    - 「换一批」重新拉两段，靠 `loadSeq` 递增序号丢弃上一批过期文案，避免串台。
 4. 用户确认内容后点击“发小红书”。
-5. `utils/xhsPublish.js` 调用小红书开放平台发布能力。
+5. `utils/xhsPublish.js` 做「半自动闭环」:把图片存进手机相册、文案复制到剪贴板,再弹窗引导用户打开小红书发布(选相册图 + 粘贴文案)。
 
 ## 配置
 
@@ -37,6 +37,20 @@ NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsmini://draft?projectId={projectId}&channel=
 
 这里的 URL 模板需要替换成小红书开放平台实际生成的小程序 URL Link。
 
-## 待接入
+## 发布(半自动闭环)
 
-`utils/xhsPublish.js` 里目前只集中封装了发布入口。小红书开放平台审核通过后，把其中的 `openXhsPublish` / `openNotePublish` / `publishNote` 占位调用替换为官方文档里的真实 API。
+小红书未开放「小程序直接带图文拉起发布页」的能力(公开文档只有 `xhs.share` 页面分享，没有笔记预填发布)，所以 `utils/xhsPublish.js` 采用半自动闭环:
+
+1. `saveImageToPhotosAlbum` 把选中的图片逐张下载(`downloadFile`)后存进手机相册；首次会用 `getSetting` / `authorize('scope.writePhotosAlbum')` / `openSetting` 申请相册权限。
+2. `setClipboardData` 把文案复制到剪贴板。
+3. 弹窗引导用户打开小红书点「+」发布，从相册选图 + 粘贴文案。
+
+注意:
+
+- `downloadFile` 的图片域名要加进小红书小程序后台的「合法域名(downloadFile)」白名单(即接口所在域名)，真机上才能下载。
+- IDE 模拟器不支持存相册，需用「真机预览」测试。
+
+### 未来升级为「一键预填」
+
+- 若官方放开小程序端原生发布跳转 → 在 `openXhsDraftPublisher` 里替换成该 API。
+- 若改用原生 App 承载 → 接小红书分享 SDK(`XhsShareSDK` / `XhsNote`)，可带图文拉起发布页、用户一点即发到自己账号。
