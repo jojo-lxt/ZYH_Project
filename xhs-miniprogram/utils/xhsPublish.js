@@ -4,6 +4,7 @@ const {
   getPlatform,
   getSetting,
   openSetting,
+  openXhsDeeplink,
   saveImageToPhotosAlbum,
   setClipboardData,
   showModal,
@@ -11,6 +12,13 @@ const {
 
 // 保存到相册所需的授权 scope(小红书小程序沿用微信系命名)。
 const ALBUM_SCOPE = "scope.writePhotosAlbum";
+
+// 小红书发布页 deeplink。真机需逐个验证哪个能被 openXhsDeeplink 放行、落点最好:
+//   xhsdiscover://post_note/       图文笔记创作页(默认)
+//   xhsdiscover://post/            打开相册选择发布
+//   xhsdiscover://hey_home_feed/   「记录我的日常」发布入口
+// 注意:openXhsDeeplink 可能有白名单,未必放行发布类 deeplink,以真机实测为准。
+const PUBLISH_DEEPLINK = "xhsdiscover://post_note/";
 
 // 拿到「保存到相册」授权:
 // 已授权 → 直接过;首次 → authorize 弹窗;曾拒绝过(authorize 不再弹)→ 引导去设置页手动开。
@@ -78,6 +86,23 @@ async function saveImagesToAlbum(imageUrls) {
   return saved;
 }
 
+// 尝试用 openXhsDeeplink 直接跳进小红书发布器。
+// 成功 → true;不支持 / 被白名单拦 / 报错 → false(由上层退回弹窗引导)。
+async function jumpToPublisher() {
+  const platform = getPlatform();
+
+  if (!platform || typeof platform.openXhsDeeplink !== "function") {
+    return false;
+  }
+
+  try {
+    await openXhsDeeplink(PUBLISH_DEEPLINK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
 // 半自动发布闭环:图片存相册 + 文案进剪贴板 + 引导用户去小红书手动发布。
 //
 // 说明:小红书未开放「小程序直接带图文拉起发布页」的能力(公开文档里只有 xhs.share
@@ -140,10 +165,39 @@ async function openXhsDraftPublisher(draft) {
     savedCount < imageUrls.length
       ? `已保存 ${savedCount}/${imageUrls.length} 张图片到相册`
       : `${imageUrls.length} 张图片已保存到相册`;
+  const captionTip = captionCopied ? ",文案已复制" : "";
+  const pasteTip = captionCopied ? "、粘贴文案" : "";
+  const canJump = !!platform && typeof platform.openXhsDeeplink === "function";
 
+  // 能跳发布器:先让用户读提示,点「去发布」再用 openXhsDeeplink 跳进小红书发布页。
+  if (canJump) {
+    const modal = await showModal({
+      cancelText: "稍后",
+      confirmText: "去发布",
+      content: `${savedTip}${captionTip}。\n点「去发布」进入小红书,选择刚存的图片${pasteTip}即可。`,
+      title: "图文已备好",
+    });
+
+    if (modal && modal.confirm) {
+      const jumped = await jumpToPublisher();
+
+      // openXhsDeeplink 存在但被白名单拦/报错:退回手动引导。
+      if (!jumped) {
+        await showModal({
+          content: `请打开小红书点「+」发布,从相册选择刚存的图片${pasteTip}即可。`,
+          showCancel: false,
+          title: "请手动打开小红书",
+        });
+      }
+    }
+
+    return;
+  }
+
+  // 不支持跳转:纯手动引导(存图 + 复制文案已完成)。
   await showModal({
     confirmText: "我知道了",
-    content: `${savedTip}${captionCopied ? ",文案已复制" : ""}。\n请打开小红书点「+」发布,从相册选择这些图片${captionCopied ? "、粘贴文案" : ""}即可。`,
+    content: `${savedTip}${captionTip}。\n请打开小红书点「+」发布,从相册选择这些图片${pasteTip}即可。`,
     showCancel: false,
     title: "图文已备好",
   });

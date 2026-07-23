@@ -39,16 +39,17 @@ NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsmini://draft?projectId={projectId}&channel=
 
 ## 发布(半自动闭环)
 
-小红书未开放「小程序直接带图文拉起发布页」的能力(公开文档只有 `xhs.share` 页面分享，没有笔记预填发布)，所以 `utils/xhsPublish.js` 采用半自动闭环:
+小红书**不支持「带图文预填」发布**(scheme 只能跳页面、不注入内容)，但**可以跳转**到发布器，所以 `utils/xhsPublish.js` 采用半自动闭环:
 
 1. `saveImageToPhotosAlbum` 把选中的图片逐张下载(`downloadFile`)后存进手机相册；首次会用 `getSetting` / `authorize('scope.writePhotosAlbum')` / `openSetting` 申请相册权限。
 2. `setClipboardData` 把文案复制到剪贴板。
-3. 弹窗引导用户打开小红书点「+」发布，从相册选图 + 粘贴文案。
+3. `openXhsDeeplink`(带 `xhsdiscover://post_note/`)直接跳进小红书发布器，用户选刚存的图 + 粘贴文案即可；`openXhsDeeplink` 不存在 / 被白名单拦 / 报错时，自动退回「弹窗引导用户手动打开小红书发布」。
 
 注意:
 
 - `downloadFile` 的图片域名要加进小红书小程序后台的「合法域名(downloadFile)」白名单(即接口所在域名)，真机上才能下载。
 - IDE 模拟器不支持存相册，需用「真机预览」测试。
+- `openXhsDeeplink` **可能有 deeplink 白名单**，未必放行发布类 scheme；`openXhsDeeplink` 的**入参字段名**也未在官方文档中确认(现同时传 `deeplink/link/url`)。真机需逐个验证 `xhsdiscover://post_note/`(图文创作)、`xhsdiscover://post/`(相册选择)、`xhsdiscover://hey_home_feed/`(日常发布入口)哪个能跳、落点最好，再裁定 `PUBLISH_DEEPLINK` 与字段名。
 
 ### 未来升级为「一键预填」
 

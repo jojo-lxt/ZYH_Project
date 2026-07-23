@@ -152,12 +152,35 @@ function openSetting() {
   });
 }
 
+function openXhsDeeplink(deeplink) {
+  const platform = getPlatform();
+
+  return new Promise((resolve, reject) => {
+    if (!platform || !platform.openXhsDeeplink) {
+      reject(new Error("当前运行环境不支持 openXhsDeeplink"));
+      return;
+    }
+
+    // openXhsDeeplink 的入参字段名未能在可访问的官方文档中确认,这里同时传
+    // deeplink / link / url 三个常见别名,真机验证后按实际字段裁掉多余的。
+    // 多余字段通常会被忽略,不会报错;真跳不动会走 fail → 上层退回弹窗引导。
+    platform.openXhsDeeplink({
+      deeplink,
+      link: deeplink,
+      url: deeplink,
+      fail: reject,
+      success: resolve,
+    });
+  });
+}
+
 module.exports = {
   authorize,
   downloadFile,
   getPlatform,
   getSetting,
   openSetting,
+  openXhsDeeplink,
   request,
   saveImageToPhotosAlbum,
   setClipboardData,
