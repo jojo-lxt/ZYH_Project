@@ -165,11 +165,18 @@ function openXhsDeeplink(deeplink) {
     // deeplink / link / url 三个常见别名,真机验证后按实际字段裁掉多余的。
     // 多余字段通常会被忽略,不会报错;真跳不动会走 fail → 上层退回弹窗引导。
     platform.openXhsDeeplink({
-      deeplink,
       link: deeplink,
-      url: deeplink,
-      fail: reject,
-      success: resolve,
+      success: (res) => {
+        console.log('跳转成功:', res.errMsg);
+        resolve(res)
+      },
+      fail: (err) => {
+        console.error('跳转失败:', err.errMsg);
+        reject(err)
+      },
+      complete: (m) => {
+        console.log('openXhsDeeplink 调用结束', m);
+      }
     });
   });
 }
