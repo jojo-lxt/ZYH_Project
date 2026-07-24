@@ -22,7 +22,6 @@
     <view class="result-head">
       <text>生成结果预览</text>
       <view>
-        <button bindtap="refreshPreview" size="mini" loading="{{refreshing}}">换一批</button>
         <button bindtap="copyCaption" size="mini" disabled="{{captionLoading}}">复制</button>
       </view>
     </view>
@@ -37,7 +36,7 @@
       </block>
     </view>
 
-    <button class="secondary-action" bindtap="copyCaption" disabled="{{captionLoading}}">复制文案</button>
+    <button class="secondary-action" bindtap="refreshPreview" loading="{{refreshing}}">换一批</button>
 
     <view class="footer">
       <button bindtap="openPublisher" class="primary" loading="{{publishing}}" disabled="{{captionLoading}}">
