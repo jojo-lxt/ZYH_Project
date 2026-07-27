@@ -1,0 +1,17 @@
+{
+  "navigationBarTitleText": "发小红书按钮",
+  "usingComponents": {
+    "showbox": "../../common/component/showbox/index",
+    "box": "../../common/component/container/index"
+  },
+  "skeleton1": {
+    "path": "./post-note-button.skeleton.xhsml",
+    "options": {
+      "background": "#eee",
+      "animation": "shine"
+    }
+  },
+  "skeleton": {
+    "path": "post-note-button.skeleton.xhsml"
+  }
+}

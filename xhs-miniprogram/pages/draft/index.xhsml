@@ -39,7 +39,24 @@
     <button class="secondary-action" bindtap="refreshPreview" loading="{{refreshing}}">换一批</button>
 
     <view class="footer">
-      <button bindtap="openPublisher" class="primary" loading="{{publishing}}" disabled="{{captionLoading}}">
+      <!-- 正常流程:文案就绪后用小红书原生「发小红书」组件,点击即带图文跳发布页 -->
+      <post-note-button
+        xhs:if="{{!demo && !captionLoading}}"
+        style="width: 100%;"
+        type="default"
+        size="large"
+        title="{{publishTitle}}"
+        content="{{publishContent}}"
+        media-info="{{mediaInfo}}"
+        tags="{{publishTags}}"
+        binderror="onPublishError"
+      ></post-note-button>
+      <!-- 示例模式:不真跳发布,点了只弹说明 -->
+      <button xhs:elif="{{demo}}" class="primary" bindtap="showDemoPublishTip">
+        + 发小红书
+      </button>
+      <!-- 文案生成中:占位禁用按钮 -->
+      <button xhs:else class="primary" disabled loading="{{captionLoading}}">
         + 发小红书
       </button>
     </view>

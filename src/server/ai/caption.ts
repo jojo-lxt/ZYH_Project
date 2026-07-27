@@ -33,6 +33,10 @@ export type CaptionInput = {
   channel?: Channel;
 };
 
+// 小红书 <post-note-button> 组件对 title 有硬性限制:超过 20 字会触发 binderror、无法跳转发布。
+// 提示词已要求模型≤20,但模型不总照做,这里在服务端解析处再硬截一刀兜底。
+const MAX_TITLE_LEN = 20;
+
 // 每种渠道身份的写作目标/角度,注入 system prompt。风格档案(style_spec/examples)会叠加在其上。
 const CHANNEL_ANGLES: Record<Channel, string> = {
   visitor:
@@ -67,7 +71,7 @@ function fallbackCaption(input: CaptionInput): XhsCaption {
 
   return {
     body: bodyParts.join("\n"),
-    title: `${input.projectName || "品质好房"}｜${points[0] ?? "实拍分享"}`,
+    title: `${input.projectName || "品质好房"}｜${points[0] ?? "实拍分享"}`.slice(0, MAX_TITLE_LEN),
     topics: dedupeNonEmpty([input.projectName, ...points, ...tags]).slice(0, 6),
   };
 }
@@ -93,7 +97,8 @@ function buildMessages(input: CaptionInput) {
   const system =
     "你是资深小红书房产种草文案写手。用口语化、有网感、带 emoji 的风格,为地产项目写一篇简短笔记。" +
     "只输出 JSON,不要额外解释或代码块围栏。JSON 字段:" +
-    "title(不超过 20 字的标题)、body(一定要符合现在小红书的爆款图文格式，可含换行和 emoji，字数在500字左右)、" +
+    "title(标题必须不超过 20 个字,这是硬性要求——超过会导致发小红书失败;要短、有网感)、" +
+    "body(一定要符合现在小红书的爆款图文格式，可含换行和 emoji，字数在500字左右)、" +
     "topics(3-6 个话题词字符串数组,不带 # 号)。" +
     channelBlock +
     styleBlock +
@@ -135,7 +140,8 @@ function parseCaption(content: string, input: CaptionInput): XhsCaption | null {
 
     return {
       body: body || fallback.body,
-      title: title || fallback.title,
+      // 组件 title ≤ 20 字硬性限制:模型仍可能超出,这里硬截一刀(fallback.title 已≤20)。
+      title: (title || fallback.title).slice(0, MAX_TITLE_LEN),
       topics: topics.length ? topics.slice(0, 6) : fallback.topics,
     };
   } catch {

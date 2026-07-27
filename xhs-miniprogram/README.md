@@ -13,7 +13,7 @@
    - 再把 `apiUrl` 的 `/preview` 换成 `/caption`（`GET /caption?channel=<身份>`）异步拿「文案 + 话题」，未回前文案卡片显示「AI 文案生成中…」占位、复制/发布按钮禁用。
    - 「换一批」重新拉两段，靠 `loadSeq` 递增序号丢弃上一批过期文案，避免串台。
 4. 用户确认内容后点击“发小红书”。
-5. `utils/xhsPublish.js` 做「半自动闭环」:把图片存进手机相册、文案复制到剪贴板,再弹窗引导用户打开小红书发布(选相册图 + 粘贴文案)。
+5. footer 里是小红书内置的 `<post-note-button>` 原生组件:点击即带图文(标题/正文/图片/话题)原生跳转到小红书发布页,用户在小红书里点发布即可。`utils/xhsPublish.js` 只负责把 draft 转成组件入参。
 
 ## 无参数打开(示例模式 / 过审关键)
 
@@ -49,21 +49,29 @@ NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsmini://draft?projectId={projectId}&channel=
 
 这里的 URL 模板需要替换成小红书开放平台实际生成的小程序 URL Link。
 
-## 发布(半自动闭环)
+## 发布(post-note-button 原生组件)
 
-小红书**不支持「带图文预填」发布**(scheme 只能跳页面、不注入内容)，但**可以跳转**到发布器，所以 `utils/xhsPublish.js` 采用半自动闭环:
+用小红书内置的 `<post-note-button>`(官方「发小红书」按钮)实现**带图文一键跳转发布页**。组件放在 `pages/draft/index.xhsml` 的 footer,入参由 `pages/draft/index.js` 从 draft 派生(见 `utils/xhsPublish.js` 的 `buildPublishProps`):
 
-1. `saveImageToPhotosAlbum` 把选中的图片逐张下载(`downloadFile`)后存进手机相册；首次会用 `getSetting` / `authorize('scope.writePhotosAlbum')` / `openSetting` 申请相册权限。
-2. `setClipboardData` 把文案复制到剪贴板。
-3. `openXhsDeeplink`(带 `xhsdiscover://post_note/`)直接跳进小红书发布器，用户选刚存的图 + 粘贴文案即可；`openXhsDeeplink` 不存在 / 被白名单拦 / 报错时，自动退回「弹窗引导用户手动打开小红书发布」。
+| 属性 | 来源 | 约束 |
+|------|------|------|
+| `title` | 文案标题 | ≤ 20 字,超出触发 `binderror` 且不跳转(客户端截断保底,`caption.ts` 也已收紧) |
+| `content` | 文案正文 | ≤ 1000 字(客户端截断保底) |
+| `media-info` | 选中图片 | **必填**,JSON 串;`image_resources`(1-18 张)/ `video_resources` 二选一;url 必须 `https://` 且响应头带 `content-disposition: inline`;本项目只发图文 |
+| `tags` | 话题数组 | 英文逗号分割,不带 `#` |
+| `binderror` | `onPublishError` | 参数校验失败时弹窗提示 |
 
-注意:
+按钮用 `type="default"` + `size="large"` 面性按钮(外观是小红书官方固定样式,只能选 type/size/宽度)。
 
-- `downloadFile` 的图片域名要加进小红书小程序后台的「合法域名(downloadFile)」白名单(即接口所在域名)，真机上才能下载。
-- IDE 模拟器不支持存相册，需用「真机预览」测试。
-- `openXhsDeeplink` **可能有 deeplink 白名单**，未必放行发布类 scheme；`openXhsDeeplink` 的**入参字段名**也未在官方文档中确认(现同时传 `deeplink/link/url`)。真机需逐个验证 `xhsdiscover://post_note/`(图文创作)、`xhsdiscover://post/`(相册选择)、`xhsdiscover://hey_home_feed/`(日常发布入口)哪个能跳、落点最好，再裁定 `PUBLISH_DEEPLINK` 与字段名。
+要求与注意:
 
-### 未来升级为「一键预填」
+- **基础库 ≥ 3.105.1、IDE ≥ 2.3.1、客户端 ≥ 8.53,且需开启「基础库 2.0 架构编译」**(即 `project.config.json` 的 `useNewCompiler: true`)。当前 `libVersion` 3.133.1 已达标。
+- 图片走公开接口 `/api/public/projects/<id>/materials/<mid>/image`,已返回 `Content-Disposition: inline`、生产为 https,满足组件要求;**无需再存相册 / 复制剪贴板**。
+- **示例模式(无参数冷启动)不渲染 `<post-note-button>`**:示例图是本地 `/assets` 资源(非 https),且不应让审核员真跳发布;改用普通按钮,点了只弹「示例内容」说明。文案生成中也用禁用占位按钮。
+- **AI 笔记治理风险**:小红书社区正在治理 AI 笔记,通过发布接口带过去的**标题/正文可能被清空**(官方工单 2026-07-27 确认,且在逐步覆盖);图片一般不受影响。用户仍可用页面顶部「复制」按钮手动补文案。
+- `openXhsDeeplink`(内部能力,官方明确不对外开放)已弃用并移除。
 
-- 若官方放开小程序端原生发布跳转 → 在 `openXhsDraftPublisher` 里替换成该 API。
-- 若改用原生 App 承载 → 接小红书分享 SDK(`XhsShareSDK` / `XhsNote`)，可带图文拉起发布页、用户一点即发到自己账号。
+### 未来升级方向
+
+- 若要**记录真实发布**:用组件的 `miniapp-session-info` 字段 + 服务端「笔记发布回调」端点(当前按需求「先不记录」,未接)。
+- 若改用原生 App 承载 → 接小红书分享 SDK(`XhsShareSDK` / `XhsNote`)。

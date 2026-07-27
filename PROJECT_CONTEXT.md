@@ -17,10 +17,10 @@
 5. H5 跳转对应小程序。
 6. 小程序展示草稿预览。
 7. 用户确认后点击“发小红书”或“发朋友圈”。
-8. 小程序做半自动闭环：把图片存进手机相册、文案复制到剪贴板，再用 `openXhsDeeplink` 跳进小红书发布器（跳不动则退回弹窗引导），用户选相册图 + 粘贴文案即可。
+8. 小程序 footer 用小红书内置 `<post-note-button>` 原生组件：点击即带图文（标题/正文/图片/话题）原生跳转到小红书发布页。
 9. 用户在平台 App 中最终确认发布。
 
-注意：小红书未开放「小程序直接带图文拉起发布页」，只有原生 App 分享 SDK（`XhsShareSDK`）能带图文让用户一点即发到自己账号、或服务端发布 API 发到已授权的商家/专业号账号。所以小程序端只能做到半自动（存图 + 复制文案 + 引导）；普通 H5 更弱（连存相册都做不到，只能复制文案）。
+注意：`<post-note-button>` 是小红书官方的小程序发布组件，能带图文一键跳发布页（图片需 https 公网地址 + `content-disposition: inline`，本项目公开图片接口已满足）。它替代了此前的半自动方案（存相册 + 复制文案 + `openXhsDeeplink`）——`openXhsDeeplink` 官方 2026-07-27 工单确认「内部使用、不对外开放」已弃用。**AI 笔记治理风险**：小红书正治理 AI 笔记，经发布组件带过去的标题/正文可能被清空（逐步覆盖中），图片一般不受影响；用户可用页面顶部「复制」按钮手动补文案。
 
 ## 技术栈
 
@@ -255,7 +255,7 @@ draft_images
 - `console_users`:已移除废弃的 `property` 字段;`role` 三级(`超级管理员`/`管理员`/`员工`,DB `CHECK` 约束);员工用 `manager_id` 指向所属管理员,`user_project_access` 存员工↔项目授权。管理员建员工时项目多选限自己名下、至少 1 个(服务层 `resolveEmployeeProjects` 校验子集);角色下拉按创建者身份收窄(超管可建管理员/员工,管理员只能建员工)
 - 营销阶段下拉单一来源:前端常量 `src/features/console/shared/marketingStages.ts`(`MARKETING_STAGES`),项目管理 + 图片素材三处下拉共用,改这一个文件即处处生效(不落库)
 - 扫码公开预览(图片/文案两段式,让图片秒显、慢的文案不拖住整页):`/p/<项目id>?channel=<身份>` 中间页 → 小程序先调 `/preview`(经 `getProjectImages(id,count)`)拿「随机 5 张图」立即展示,再把 `apiUrl` 的 `/preview` 换成 `/caption` 异步单独拉「贴合身份的 AI 文案」(文案卡片先显示「生成中」占位)。三渠道 visitor/resident/agent;身份沿链接传到 `/caption`,`parseChannel` 规整后经 `getProjectCaption(id,channel)` 注入 `CHANNEL_ANGLES[channel]`,响应带 `captionChannel`,缺省回退 visitor;可换一批(靠 `loadSeq` 递增序号丢弃上一批过期文案,避免串台);文案走 OpenAI 兼容国内大模型 `LLM_*`,未配置/失败则用卖点兜底;`/caption` 响应带 `captionSource`(ai/fallback)+ `captionReason`(兜底原因码)。每项目可在 `caption_profiles` 存**文案风格档案**(风格 spec + 认可范例)叠加在身份角度之上、`temperature=0.5` 让风格稳定;无档案退化为原行为
-- 发布存档:小程序确认发布写 `publish_records`（只存 material_ids 引用 + 文案 + 发布人/渠道,不复制图片字节）
+- 发布存档:`publish_records` 表与 `POST /api/public/projects/[id]/publish` 接口仍在(只存 material_ids 引用 + 文案 + 发布人/渠道,不复制图片字节),但**改用 `<post-note-button>` 后小程序当前不再调用它**(按需求「先不记录」);要恢复记录可走组件 `miniapp-session-info` + 服务端笔记发布回调
 - 用户管理增删改查
 - 图片上传入库，原图存入 `material_files`
 - 上传图片的类型、平台、营销阶段写入 `materials`
@@ -272,7 +272,7 @@ draft_images
 高优先级：
 
 - 「从素材生成内容」已改为扫码公开预览(随机取图 + AI 文案),但后台还没有「发布记录查看 / 渠道增删改」的管理界面
-- 小程序已接入预览接口 + 发布存档 + 半自动发布闭环(`xhs-miniprogram/utils/xhsPublish.js`:存图到相册 + 复制文案 + `openXhsDeeplink` 跳小红书发布器,跳不动退回弹窗引导);小红书 scheme 只能跳页面、不能预填图文,「一键预填」仍需官方放开或改用原生 App 分享 SDK;`openXhsDeeplink` 是否放行 `xhsdiscover://post_note/` + 其入参字段名都需真机验证;小程序改动需在小红书/微信 IDE 真机预览自测(需在后台配 `downloadFile` 合法域名)
+- 小程序已接入预览接口 + `<post-note-button>` 原生组件发布(`xhs-miniprogram/utils/xhsPublish.js` 的 `buildPublishProps` 把 draft 转成组件入参:图片→`media-info`、标题≤20/正文≤1000 截断、话题逗号拼接);组件带图文一键跳小红书发布页。需基础库≥3.105.1 + 开启「2.0 架构编译」(`useNewCompiler`)。示例模式(无参冷启动)不渲染组件、只弹说明。**AI 笔记治理可能清空经组件带入的标题/正文**(图片一般不受影响)。旧 `openXhsDeeplink`(内部能力,官方不对外)已移除;小程序改动需在小红书/微信 IDE 真机预览自测
 - `/materials/upload-video` 仍是占位页
 - 项目渠道二维码读取 `property_channels`；新建项目自动生成三条渠道（游客/用户/中介），但仍没有后续增删改渠道的管理入口
 
@@ -366,8 +366,8 @@ xhs-miniprogram/utils/xhsPublish.js
 - 从 query 获取 `projectId` + `channel`（或中间页直接传入的完整 `apiUrl`，已带 `?channel=`）；缺 `apiUrl` 时用 `projectId`+`channel` 拼 `/preview?channel=`，`channel` 缺省 `visitor`
 - 两段式请求：先 `GET /preview` 拿随机图立即展示，再 `GET /caption`（由 `apiUrl` 的 `/preview` 替换为 `/caption`）异步拿文案；文案未回前卡片显示「AI 文案生成中…」占位，复制/发布按钮禁用
 - 展示图片、文案、话题；「换一批」重新拉两段，靠 `loadSeq` 序号丢弃上一批过期文案
-- 点击“发小红书”后调用 `openXhsDraftPublisher`
-- 若平台发布 API 不存在，则复制文案并弹出“发布能力待接入”
+- footer 用小红书内置 `<post-note-button>` 组件(`type=default`/`size=large`),入参由 `buildPublishProps(draft)` 派生:图片→`media-info`、标题截断≤20、正文截断≤1000、话题逗号拼接;点击即带图文原生跳小红书发布页,校验失败走 `onPublishError` 弹窗
+- 示例模式(demo,无参冷启动)与文案生成中不渲染组件,改用普通/禁用按钮;`openXhsDeeplink` 及存相册/剪贴板半自动流程已移除
 
 小红书 AppID 需要在小红书小程序平台创建小程序后获得：
 
@@ -511,6 +511,7 @@ node_modules/next/dist/docs/
 
 ```text
 xhs-miniprogram/README.md
+xhs-miniprogram/pages/draft/index.xhsml   # <post-note-button> 组件在这里
 xhs-miniprogram/pages/draft/index.js
-xhs-miniprogram/utils/xhsPublish.js
+xhs-miniprogram/utils/xhsPublish.js       # buildPublishProps:draft → 组件入参
 ```

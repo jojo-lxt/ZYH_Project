@@ -5,7 +5,7 @@ const {
   showModal,
   showToast,
 } = require("../../utils/platform");
-const { openXhsDraftPublisher } = require("../../utils/xhsPublish");
+const { buildPublishProps } = require("../../utils/xhsPublish");
 const { getDemoDraft } = require("../../utils/mockDraft");
 
 function trimSlash(value) {
@@ -78,8 +78,13 @@ Page({
     draft: null,
     error: "",
     loading: true,
+    // <post-note-button> 组件入参(由 draft 派生,见 publishDataFrom):
+    // media-info 必填的图片 JSON 串、话题、截断后的标题/正文。
+    mediaInfo: "",
     projectId: "",
-    publishing: false,
+    publishContent: "",
+    publishTags: "",
+    publishTitle: "",
     refreshing: false,
   },
 
@@ -185,16 +190,20 @@ Page({
         return;
       }
 
+      const nextDraft = {
+        ...draft,
+        body,
+        caption: [title, body].filter(Boolean).join("\n\n"),
+        tags: topics,
+        title,
+        topics,
+      };
+
       this.setData({
         captionLoading: false,
-        draft: {
-          ...draft,
-          body,
-          caption: [title, body].filter(Boolean).join("\n\n"),
-          tags: topics,
-          title,
-          topics,
-        },
+        draft: nextDraft,
+        // 文案回来后,把标题/正文/话题补进 <post-note-button> 入参。
+        ...this.publishDataFrom(nextDraft),
       });
     } catch (error) {
       if (seq !== this.loadSeq) {
@@ -216,7 +225,21 @@ Page({
       error: "",
       loading: false,
       refreshing: false,
+      // 图片已就位,先算出 media-info;标题/正文待文案回来再补。
+      ...this.publishDataFrom(draft),
     });
+  },
+
+  // 由 draft 派生 <post-note-button> 组件入参(标题/正文截断、图片转 media-info)。
+  publishDataFrom(draft) {
+    const props = buildPublishProps(draft);
+
+    return {
+      mediaInfo: props.mediaInfo,
+      publishContent: props.content,
+      publishTags: props.tags,
+      publishTitle: props.title,
+    };
   },
 
   // 换一批:重新拉一组随机图 + 新文案。序号机制保证上一批的慢文案不会串台。
@@ -272,49 +295,25 @@ Page({
     showToast("文案已复制", "success");
   },
 
-  async openPublisher() {
-    // 示例模式:不做存图/发布,弹窗说明这是展示内容,引导去扫码体验真实功能。
-    if (this.data.demo) {
-      await showModal({
-        content:
-          "当前为内容展示示例。扫描具体项目的二维码进入后,可保存图片、复制文案并前往小红书发布。",
-        showCancel: false,
-        title: "示例内容",
-      });
-      return;
-    }
+  // 示例模式:post-note-button 需要 https 公网图 + 会真的跳发布页,示例图是本地资源、
+  // 也不该让审核员真跳去发布;所以示例模式改用普通按钮,点了只弹窗说明。
+  async showDemoPublishTip() {
+    await showModal({
+      content:
+        "当前为内容展示示例。扫描具体项目的二维码进入后,可直接跳转小红书发布页。",
+      showCancel: false,
+      title: "示例内容",
+    });
+  },
 
-    const draft = this.data.draft;
+  // <post-note-button> 参数校验失败(标题/正文超长、media-info 不合法等)时触发。
+  onPublishError(event) {
+    const detail = (event && event.detail) || {};
 
-    // 文案还没生成完就不放行,避免把空文案带进发布记录。
-    if (!draft || this.data.captionLoading) {
-      return;
-    }
-
-    this.setData({ publishing: true });
-
-    try {
-      // 先把这一组存成发布记录(只存 material_ids 引用 + 文案),再打开小红书发布页。
-      if (this.data.apiBaseUrl && this.data.projectId) {
-        await request({
-          data: {
-            body: draft.body,
-            channel: "xhs",
-            materialIds: draft.materialIds,
-            publisher: "",
-            title: draft.title,
-            topics: draft.topics,
-          },
-          method: "POST",
-          url: `${trimSlash(this.data.apiBaseUrl)}/api/public/projects/${this.data.projectId}/publish`,
-        });
-      }
-
-      await openXhsDraftPublisher(draft);
-    } catch (error) {
-      showToast(error.message || "打开发布页失败");
-    } finally {
-      this.setData({ publishing: false });
-    }
+    showModal({
+      content: detail.errMsg || "内容不符合发布要求,请点「换一批」重试。",
+      showCancel: false,
+      title: "无法发布",
+    });
   },
 });

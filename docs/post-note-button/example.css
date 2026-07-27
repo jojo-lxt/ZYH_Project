@@ -1,0 +1,93 @@
+.flex {
+    display: flex;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.mr-20 {
+    margin-right: 20px;
+}
+
+.mb-8 {
+    margin-bottom: 8px;
+}
+
+.mb-20 {
+    margin-bottom: 20px;
+}
+
+.safe-area {
+    padding-bottom: 150px;
+}
+
+.w-full {
+    width: 100%;
+}
+
+.word-break {
+    word-break: keep-all;
+}
+
+/* 用户选择媒体相关样式 */
+.user-media-preview {
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 16px;
+    background: #fafafa;
+}
+
+.media-select-buttons {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.publish-test-area {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #e9ecef;
+}
+
+.empty-state {
+    border: 2px dashed #ddd;
+    border-radius: 12px;
+    margin: 16px 0;
+}
+
+.image-preview-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.image-preview-item {
+    flex-shrink: 0;
+}
+
+.video-preview {
+    display: flex;
+    justify-content: center;
+}
+
+.mb-12 {
+    margin-bottom: 12px;
+}
+
+.mb-16 {
+    margin-bottom: 16px;
+}
+
+.mb-20 {
+    margin-bottom: 20px;
+}

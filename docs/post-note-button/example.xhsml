@@ -1,0 +1,363 @@
+<view class="container">
+  <showbox title="type = floating 悬浮按钮，见屏幕下方">
+    <post-note-button
+      hidden="{{!showFloatingButton}}"
+      title="{{noteTitle}}"
+      content="{{noteContent}}"
+      type="floating"
+      binderror="bindError"
+      media-info="{{mediaInfo}}"
+      tags="{{tags}}"
+    ></post-note-button>
+  </showbox>
+  <showbox title="type = default 面性按钮">
+    <box class="box">
+      <view class="flex items-center mb-20">
+        <text class="mr-20">size = medium</text>
+        <post-note-button
+          class="mr-20"
+          title="{{noteTitle}}"
+          content="{{noteContent}}"
+          binderror="bindError"
+          type="default"
+          media-info="{{mediaInfo}}"
+          tags="{{tags}}"
+        ></post-note-button>
+      </view>
+      <view class="flex items-center">
+        <text class="mr-20">可自定义宽度</text>
+        <post-note-button
+          style="width: 250px;"
+          title="{{noteTitle}}"
+          content="{{noteContent}}"
+          binderror="bindError"
+          type="default"
+          media-info="{{mediaInfo}}"
+          tags="{{tags}}"
+        ></post-note-button>
+      </view>
+    </box>
+    <box class="box">
+      <view class="flex items-center mb-20 w-full">
+        <text class="mr-20">size = large</text>
+        <view class="flex justify-center">
+          <post-note-button
+            class="mr-20"
+            title="{{noteTitle}}"
+            content="{{noteContent}}"
+            type="default"
+            size="large"
+            binderror="bindError"
+            media-info="{{mediaInfo}}"
+            tags="{{tags}}"
+          ></post-note-button>
+        </view>
+      </view>
+      <view class="flex items-center">
+        <text class="mr-20">可自定义宽度</text>
+        <post-note-button
+          style="width: 250px;"
+          title="{{noteTitle}}"
+          content="{{noteContent}}"
+          type="default"
+          size="large"
+          binderror="bindError"
+          media-info="{{mediaInfo}}"
+          tags="{{tags}}"
+        ></post-note-button>
+      </view>
+    </box>
+  </showbox>
+  <showbox title="type = plain 线性按钮">
+    <box class="box flex items-center">
+      <view class="flex items-center">
+        <text class="mr-20">size = medium</text>
+        <post-note-button
+          title="{{noteTitle}}"
+          content="{{noteContent}}"
+          type="plain"
+          binderror="bindError"
+          media-info="{{mediaInfo}}"
+          tags="{{tags}}"
+        ></post-note-button>
+      </view>
+    </box>
+    <box class="box">
+      <view class="flex items-center">
+        <text class="mr-20">size = large</text>
+        <post-note-button
+          title="{{noteTitle}}"
+          content="{{noteContent}}"
+          type="plain"
+          size="large"
+          binderror="bindError"
+          media-info="{{mediaInfo}}"
+          tags="{{tags}}"
+        ></post-note-button>
+      </view>
+    </box>
+  </showbox>
+  <showbox title="📱 用户选择本地媒体测试 - chooseMedia API">
+    <box class="box">
+      <view class="mb-8" style="color: #333; font-weight: bold;">
+        测试用户从本地相册或拍摄选择图片/视频，然后发布小红书
+      </view>
+
+      <!-- 选择媒体按钮区域 -->
+      <view class="media-select-buttons mb-20">
+        <button
+          class="mb-8"
+          bindtap="chooseUserMedia"
+          style="background-color: #ff2442; color: white; border-radius: 8px; padding: 12px 24px;"
+        >
+          📷 选择本地图片或视频
+        </button>
+        <button
+          wx:if="{{userSelectedMedia.length > 0}}"
+          class="mb-8"
+          bindtap="clearUserMedia"
+          style="background-color: #666; color: white; border-radius: 8px; padding: 8px 16px;"
+        >
+          🗑️ 清空选择
+        </button>
+      </view>
+
+      <!-- 选择状态提示 -->
+      <view wx:if="{{userSelectedMedia.length > 0}}" class="mb-16">
+        <view style="padding: 12px; background: #e8f5e8; border-radius: 8px; border-left: 4px solid #4caf50;">
+          <view style="color: #2e7d32; font-weight: bold; margin-bottom: 4px;">
+            ✅ 已选择 {{userSelectedMedia.length}} 个{{userSelectedMediaType === 'image' ? '图片' : '视频'}}文件
+          </view>
+          <view style="color: #388e3c; font-size: 14px;">
+            可以使用下方的发布按钮测试完整流程
+          </view>
+        </view>
+      </view>
+
+      <!-- 媒体预览区域 -->
+      <view wx:if="{{userSelectedMedia.length > 0}}" class="user-media-preview mb-20">
+        <view class="mb-8" style="color: #333; font-weight: bold;">📋 媒体预览：</view>
+
+        <!-- 图片预览网格 -->
+        <view wx:if="{{userSelectedMediaType === 'image'}}" class="image-preview-grid mb-12">
+          <view
+            wx:for="{{userSelectedMedia}}"
+            wx:key="index"
+            class="image-preview-item"
+            style="position: relative; display: inline-block; margin: 4px;"
+          >
+            <image
+              src="{{item.tempFilePath}}"
+              mode="aspectFill"
+              style="width: 80px; height: 80px; border-radius: 6px; border: 2px solid #eee;"
+            />
+            <view style="position: absolute; top: 2px; right: 2px; background: rgba(0,0,0,0.7); color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px;">
+              {{index + 1}}
+            </view>
+          </view>
+        </view>
+
+        <!-- 视频预览 -->
+        <view wx:if="{{userSelectedMediaType === 'video'}}" class="video-preview mb-12">
+          <view
+            wx:for="{{userSelectedMedia}}"
+            wx:key="index"
+            style="position: relative; display: inline-block; margin: 4px;"
+          >
+            <video
+              src="{{item.tempFilePath}}"
+              poster="{{item.thumbTempFilePath}}"
+              style="width: 200px; height: 150px; border-radius: 8px; border: 2px solid #eee;"
+              controls="{{false}}"
+              show-center-play-btn="{{true}}"
+            />
+            <view style="position: absolute; bottom: 6px; right: 6px; background: rgba(0,0,0,0.8); color: white; font-size: 11px; padding: 3px 6px; border-radius: 4px;">
+              {{item.duration ? Math.ceil(item.duration) + 's' : '视频'}}
+            </view>
+          </view>
+        </view>
+
+        <!-- 文件详细信息 -->
+        <view class="media-details" style="padding: 12px; background: #f8f9fa; border-radius: 8px; font-size: 12px; color: #666;">
+          <view style="font-weight: bold; margin-bottom: 8px; color: #333;">📊 文件信息：</view>
+          <view wx:for="{{userSelectedMedia}}" wx:key="index" style="margin-bottom: 6px; font-family: monospace;">
+            <text style="color: #007bff;">文件{{index + 1}}:</text>
+            <text style="margin-left: 8px;">{{item.size ? (item.size / 1024 / 1024).toFixed(2) + 'MB' : '未知大小'}}</text>
+            <text wx:if="{{item.width && item.height}}" style="margin-left: 8px;">| {{item.width}}×{{item.height}}</text>
+            <text wx:if="{{item.duration}}" style="margin-left: 8px;">| {{Math.ceil(item.duration)}}秒</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 发布按钮测试区域 -->
+      <view wx:if="{{userSelectedMedia.length > 0}}" class="publish-test-area">
+        <view class="mb-12" style="color: #333; font-weight: bold; border-top: 1px solid #eee; padding-top: 16px;">
+          🚀 使用选择的媒体发布小红书：
+        </view>
+
+        <!-- 调试信息：显示传递给组件的媒体信息 -->
+        <view class="debug-info mb-16" style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 12px;">
+          <view style="color: #856404; font-weight: bold; margin-bottom: 8px;">🔍 调试信息 - 传递给post-note-button的参数：</view>
+          <view style="font-size: 12px; color: #856404; font-family: monospace; word-break: break-all; line-height: 1.4; background: white; padding: 8px; border-radius: 4px;">
+            media-info="{{userMediaInfo}}"
+          </view>
+          <view style="margin-top: 8px; font-size: 11px; color: #6c757d;">
+            ℹ️ 这就是传递给post-note-button组件的media-info参数，包含用户选择的本地文件路径
+          </view>
+          <view style="margin-top: 4px; font-size: 11px; color: #dc3545;">
+            ⚠️ 如果上面显示为空对象"{}"，说明还没有选择媒体或数据转换有问题
+          </view>
+        </view>
+
+        <view class="flex items-center mb-12">
+          <text class="mr-20" style="min-width: 120px;">default medium:</text>
+          <post-note-button
+            title="{{noteTitle}}"
+            content="{{noteContent}}"
+            type="default"
+            size="medium"
+            binderror="bindError"
+            media-info="{{userMediaInfo}}"
+            tags="{{tags}}"
+          ></post-note-button>
+        </view>
+      </view>
+
+      <!-- 未选择媒体时的提示 -->
+      <view wx:if="{{userSelectedMedia.length === 0}}" class="empty-state">
+        <view style="text-align: center; padding: 40px 20px; color: #999;">
+          <view style="font-size: 48px; margin-bottom: 16px;">📱</view>
+          <view style="font-size: 16px; margin-bottom: 8px;">还未选择任何媒体文件</view>
+          <view style="font-size: 14px;">点击上方按钮选择本地图片或视频</view>
+        </view>
+      </view>
+    </box>
+  </showbox>
+  <showbox title="参数设置区域，设置发小红书配置按钮参数">
+    <box class="box">
+      <view style="margin-bottom: 16px;">
+        <navigator url="/api-case/post-note/post-note" style="display: inline-block; padding: 8px 16px; background-color: #ff2442; color: white; border-radius: 4px;">
+          查看 postNote API 测试页面
+        </navigator>
+      </view>
+      <view class="mb-8">
+        笔记标题 title，最大长度 20
+      </view>
+      <view class="_ui-input">
+        <input
+          value="{{ noteTitle }}"
+          placeholder="输入笔记标题"
+          placeholder-style="color: #3333334D;"
+          bindinput="bindInputNoteTitle"
+          maxlength="-1"
+          bindfocus="bindFocus"
+          bindblur="bindBlur"
+        />
+      </view>
+    </box>
+    <box class="box">
+      <view class="mb-8">
+        笔记内容 content，最大长度 1000
+      </view>
+      <view class="_ui-input">
+        <textarea
+          auto-height
+          value="{{ noteContent }}"
+          placeholder="输入笔记内容"
+          placeholder-style="color: #3333334D;"
+          bindinput="bindInputNoteContent"
+          maxlength="-1"
+          bindfocus="bindFocus"
+          bindblur="bindBlur"
+        />
+      </view>
+    </box>
+    <box class="box">
+      <view class="mb-8">
+        话题 tags，使用英文逗号分割
+      </view>
+      <view class="_ui-input">
+        <input
+          value="{{ tags }}"
+          placeholder="话题，使用英文逗号分割"
+          placeholder-style="color: #3333334D;"
+          bindinput="bindInputTags"
+          maxlength="-1"
+          bindfocus="bindFocus"
+          bindblur="bindBlur"
+        />
+      </view>
+    </box>
+    <box class="box">
+      <view class="mb-8">
+        快速调整 media-info
+      </view>
+      <view>
+        <button
+          class="mb-8"
+          bindtap="changeMediaInfoToImageResource"
+        >
+          调整到发布 1 张图片
+        </button>
+        <button
+          class="mb-8"
+          bindtap="changeMediaInfoToVideoResource"
+        >
+          调整到发布视频资源
+        </button>
+        <button
+          class="mb-8"
+          bindtap="changeMediaInfoToDifferentImageResource"
+        >
+          调整到图片为 18 张不同的
+        </button>
+        <button
+          class="mb-8"
+          bindtap="changeMediaInfoToSameImageResource"
+        >
+          调整到图片为 18 张一样的
+        </button>
+        <button
+          class="mb-8"
+          bindtap="changeMediaInfoTooLong"
+        >
+          调整到图片资源个数不符合要求（19）
+        </button>
+      </view>
+    </box>
+    <box class="box">
+      <view class="mb-8">
+        媒体信息，media-info（图片 1-18 张 / 视频 1 个）
+      </view>
+      <view class="_ui-input">
+        <textarea
+          value="{{ mediaInfo }}"
+          auto-height
+          placeholder="话题，使用英文逗号分割"
+          placeholder-style="color: #3333334D;"
+          bindinput="bindInputMediaInfo"
+          maxlength="-1"
+          bindfocus="bindFocus"
+          bindblur="bindBlur"
+        />
+      </view>
+    </box>
+  </showbox>
+  <showbox title="曝光埋点测试用，下滑直到按钮可见">
+    <box class="box">
+      <scroll-view
+        style="height: 300px;"
+        scroll-y
+        show-scrollbar
+      >
+        <view style="height: 500px; background-color: antiquewhite;"></view>
+        <view
+          style="margin-top: 20px; margin-bottom: 20px; display: flex; align-items: center; justify-content: center;"
+        >
+          <post-note-button></post-note-button>
+        </view>
+      </scroll-view>
+    </box>
+  </showbox>
+  <view class="safe-area"></view>
+</view>
