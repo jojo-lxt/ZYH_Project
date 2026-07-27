@@ -234,6 +234,22 @@ Page({
   publishDataFrom(draft) {
     const props = buildPublishProps(draft);
 
+    // 诊断①:打印真正绑给组件的入参。若这里 finalContent 非空且正确,而真机发出去
+    // 却没文案 → 说明文案在小程序侧是完整带上的,是小红书 App 侧的 AI 笔记治理清空了,
+    // 非本地数据/绑定问题。若这里就空 → 是本地问题(文案没生成/被截没),可修。
+    console.log("[XHS发布] 诊断① 组件入参", {
+      rawTitle: draft.title,
+      rawTitleLen: (draft.title || "").length,
+      finalTitle: props.title,
+      finalTitleLen: props.title.length,
+      rawBodyLen: (draft.body || "").length,
+      finalContent: props.content,
+      finalContentLen: props.content.length,
+      tags: props.tags,
+      imageCount: (draft.selectedImages || []).length,
+      mediaInfo: props.mediaInfo,
+    });
+
     return {
       mediaInfo: props.mediaInfo,
       publishContent: props.content,
@@ -306,9 +322,28 @@ Page({
     });
   },
 
+  // 诊断②:点击组件那一刻,打印此刻真正带出去的内容。若组件的 bindtap 在真机能触发,
+  // 这里能看到点击瞬间的 title/content;若这里 content 有值、发出去的笔记却没文案,
+  // 就坐实是小红书 App 侧治理清空(而非我们没带)。bindtap 若在真机不触发也没关系,
+  // 诊断① 的入参日志一样能说明问题。
+  onPublishTap() {
+    console.log("[XHS发布] 诊断② 点击发布,当前带出的内容", {
+      titleLen: (this.data.publishTitle || "").length,
+      title: this.data.publishTitle,
+      contentLen: (this.data.publishContent || "").length,
+      content: this.data.publishContent,
+      tags: this.data.publishTags,
+      mediaInfo: this.data.mediaInfo,
+    });
+  },
+
   // <post-note-button> 参数校验失败(标题/正文超长、media-info 不合法等)时触发。
   onPublishError(event) {
     const detail = (event && event.detail) || {};
+
+    // 诊断③:校验失败详情。若真机上文案带不过去其实是触发了 binderror(而非治理),
+    // 这里会打出具体 errMsg(比如某字段超限),据此就能判定是参数问题还是治理。
+    console.error("[XHS发布] 诊断③ binderror 校验失败", detail);
 
     showModal({
       content: detail.errMsg || "内容不符合发布要求,请点「换一批」重试。",

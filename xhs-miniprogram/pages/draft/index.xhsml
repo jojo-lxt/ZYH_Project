@@ -49,6 +49,7 @@
         content="{{publishContent}}"
         media-info="{{mediaInfo}}"
         tags="{{publishTags}}"
+        bindtap="onPublishTap"
         binderror="onPublishError"
       ></post-note-button>
       <!-- 示例模式:不真跳发布,点了只弹说明 -->
