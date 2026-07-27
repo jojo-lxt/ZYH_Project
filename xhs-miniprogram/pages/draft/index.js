@@ -2,9 +2,11 @@ const { API_BASE_URL } = require("../../utils/config");
 const {
   request,
   setClipboardData,
+  showModal,
   showToast,
 } = require("../../utils/platform");
 const { openXhsDraftPublisher } = require("../../utils/xhsPublish");
+const { getDemoDraft } = require("../../utils/mockDraft");
 
 function trimSlash(value) {
   return value.replace(/\/+$/, "");
@@ -71,6 +73,8 @@ Page({
     captionLoading: false,
     currentImage: null,
     currentImageIndex: 0,
+    // 无参数冷启动时用内置示例内容(不连后端),避免出现「缺少项目参数」错误页。
+    demo: false,
     draft: null,
     error: "",
     loading: true,
@@ -82,12 +86,38 @@ Page({
   onLoad(options) {
     const context = getPreviewContext(options);
 
+    // 无参数冷启动(如平台审核直接从主入口打开、并非扫码进入):不依赖后端,
+    // 展示内置示例内容,避免落到「缺少项目参数」错误页导致审核不通过。
+    if (!context.apiUrl) {
+      this.showDemo();
+      return;
+    }
+
     this.setData({
       apiBaseUrl: context.apiBaseUrl,
       apiUrl: context.apiUrl,
       projectId: context.projectId,
     });
     this.loadPreview();
+  },
+
+  // 本地示例:用内置图片 + 固定「展示文案」渲染一个可用页面,全程不发网络请求。
+  showDemo() {
+    const draft = getDemoDraft();
+
+    this.setData({
+      apiBaseUrl: "",
+      apiUrl: "",
+      captionLoading: false,
+      currentImage: draft.selectedImages[0] || null,
+      currentImageIndex: 0,
+      demo: true,
+      draft,
+      error: "",
+      loading: false,
+      projectId: "",
+      refreshing: false,
+    });
   },
 
   async loadPreview(isRefresh) {
@@ -191,6 +221,26 @@ Page({
 
   // 换一批:重新拉一组随机图 + 新文案。序号机制保证上一批的慢文案不会串台。
   refreshPreview() {
+    // 示例模式没有后端,「换一批」仅在本地轮转示例图片,保留可交互体验。
+    if (this.data.demo) {
+      const draft = this.data.draft;
+
+      if (!draft || !draft.selectedImages.length) {
+        return;
+      }
+
+      const rotated = draft.selectedImages
+        .slice(1)
+        .concat(draft.selectedImages.slice(0, 1));
+
+      this.setData({
+        currentImage: rotated[0] || null,
+        currentImageIndex: 0,
+        draft: { ...draft, selectedImages: rotated },
+      });
+      return;
+    }
+
     if (this.data.refreshing || this.data.loading) {
       return;
     }
@@ -223,6 +273,17 @@ Page({
   },
 
   async openPublisher() {
+    // 示例模式:不做存图/发布,弹窗说明这是展示内容,引导去扫码体验真实功能。
+    if (this.data.demo) {
+      await showModal({
+        content:
+          "当前为内容展示示例。扫描具体项目的二维码进入后,可保存图片、复制文案并前往小红书发布。",
+        showCancel: false,
+        title: "示例内容",
+      });
+      return;
+    }
+
     const draft = this.data.draft;
 
     // 文案还没生成完就不放行,避免把空文案带进发布记录。
