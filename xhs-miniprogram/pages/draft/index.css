@@ -137,17 +137,15 @@ textarea {
   color: #111827;
 }
 
-/* 粘贴引导条:固定在底部按钮上方,提示用户跳转后到发布页长按正文粘贴文案 */
+/* 粘贴引导条:排在「生成结果预览」与文案卡片之间,随页面正常排版,不悬浮、不与正文叠字 */
 .publish-hint {
-  position: fixed;
-  right: 30rpx;
-  bottom: 130rpx;
-  left: 30rpx;
-  z-index: 10;
-  text-align: center;
+  margin-bottom: 24rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background: #fff2f3;
   color: #b42318;
-  font-size: 22rpx;
-  line-height: 1.4;
+  font-size: 24rpx;
+  line-height: 1.5;
 }
 
 .footer {

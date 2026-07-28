@@ -26,6 +26,12 @@
       </view>
     </view>
 
+    <!-- 跳转后小红书会清空经接口带过去的 AI 文案(图片不受影响),点发布已把文案复制到剪贴板,
+         引导用户到发布页长按正文粘贴补回。放在预览标题与文案卡片之间,随页面正常排版,不再悬浮叠字 -->
+    <view xhs:if="{{!demo && !captionLoading}}" class="publish-hint">
+      💡 跳转后请在发布页长按正文「粘贴」补上文案(点发布已自动复制)
+    </view>
+
     <view class="caption-card">
       <view xhs:if="{{captionLoading}}" class="caption-loading">AI 文案生成中…</view>
       <block xhs:else>
@@ -37,12 +43,6 @@
     </view>
 
     <button class="secondary-action" bindtap="refreshPreview" loading="{{refreshing}}">换一批</button>
-
-    <!-- 跳转后小红书会清空经接口带过去的 AI 文案(图片不受影响),点发布已把文案复制好,
-         引导用户到发布页长按正文粘贴补回 -->
-    <view xhs:if="{{!demo && !captionLoading}}" class="publish-hint">
-      跳转后请在正文长按「粘贴」补上文案(点发布已自动复制)
-    </view>
 
     <view class="footer">
       <!-- 正常流程:文案就绪后用小红书原生「发小红书」组件,点击即带图跳发布页;文案经接口

@@ -341,7 +341,9 @@ Page({
     }
 
     setClipboardData(text);
-    showToast("文案已复制,发布页长按正文粘贴");
+    // 点发布会立即原生跳转到小红书,页面随即切后台,这个 toast 多半只一闪;粘贴引导以
+    // 「生成结果预览」下方那条常驻提示为准,toast 仅作复制成功的即时反馈。
+    showToast("文案已复制");
   },
 
   // <post-note-button> 参数校验失败(标题/正文超长、media-info 不合法等)时触发。
