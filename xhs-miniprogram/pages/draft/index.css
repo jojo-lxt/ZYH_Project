@@ -137,6 +137,19 @@ textarea {
   color: #111827;
 }
 
+/* 粘贴引导条:固定在底部按钮上方,提示用户跳转后到发布页长按正文粘贴文案 */
+.publish-hint {
+  position: fixed;
+  right: 30rpx;
+  bottom: 130rpx;
+  left: 30rpx;
+  z-index: 10;
+  text-align: center;
+  color: #b42318;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
 .footer {
   position: fixed;
   right: 30rpx;

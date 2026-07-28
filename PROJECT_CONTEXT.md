@@ -20,7 +20,7 @@
 8. 小程序 footer 用小红书内置 `<post-note-button>` 原生组件：点击即带图文（标题/正文/图片/话题）原生跳转到小红书发布页。
 9. 用户在平台 App 中最终确认发布。
 
-注意：`<post-note-button>` 是小红书官方的小程序发布组件，能带图文一键跳发布页（图片需 https 公网地址 + `content-disposition: inline`，本项目公开图片接口已满足）。它替代了此前的半自动方案（存相册 + 复制文案 + `openXhsDeeplink`）——`openXhsDeeplink` 官方 2026-07-27 工单确认「内部使用、不对外开放」已弃用。**AI 笔记治理风险**：小红书正治理 AI 笔记，经发布组件带过去的标题/正文可能被清空（逐步覆盖中），图片一般不受影响；用户可用页面顶部「复制」按钮手动补文案。
+注意：`<post-note-button>` 是小红书官方的小程序发布组件，能带图文一键跳发布页（图片需 https 公网地址 + `content-disposition: inline`，本项目公开图片接口已满足）。它替代了此前的半自动方案（存相册 + 复制文案 + `openXhsDeeplink`）——`openXhsDeeplink` 官方 2026-07-27 工单确认「内部使用、不对外开放」已弃用。**AI 笔记治理 + 剪贴板兜底**：小红书正治理 AI 笔记，经发布组件（接口层）带过去的标题/正文**会被清空**（逐步全量中），图片不受影响。已诊断坐实：小程序侧文案完整、跳转后只剩图片 = App 侧清空，代码无法让经接口的文案留下来。故点发布时把文案复制到剪贴板 + 引导用户到发布页长按正文「粘贴」补回（手动粘贴不走被清空的接口通道）。
 
 ## 技术栈
 
@@ -272,7 +272,7 @@ draft_images
 高优先级：
 
 - 「从素材生成内容」已改为扫码公开预览(随机取图 + AI 文案),但后台还没有「发布记录查看 / 渠道增删改」的管理界面
-- 小程序已接入预览接口 + `<post-note-button>` 原生组件发布(`xhs-miniprogram/utils/xhsPublish.js` 的 `buildPublishProps` 把 draft 转成组件入参:图片→`media-info`、标题≤20/正文≤1000 截断、话题逗号拼接);组件带图文一键跳小红书发布页。需基础库≥3.105.1 + 开启「2.0 架构编译」(`useNewCompiler`)。示例模式(无参冷启动)不渲染组件、只弹说明。**AI 笔记治理可能清空经组件带入的标题/正文**(图片一般不受影响)。旧 `openXhsDeeplink`(内部能力,官方不对外)已移除;小程序改动需在小红书/微信 IDE 真机预览自测
+- 小程序已接入预览接口 + `<post-note-button>` 原生组件发布(`xhs-miniprogram/utils/xhsPublish.js` 的 `buildPublishProps` 把 draft 转成组件入参:图片→`media-info`、标题≤20/正文≤1000 截断、话题逗号拼接);组件带图一键跳小红书发布页。需基础库≥3.105.1 + 开启「2.0 架构编译」(`useNewCompiler`)。示例模式(无参冷启动)不渲染组件、只弹说明。**AI 笔记治理会清空经组件带入的标题/正文**(图片不受影响);兜底是点发布时 `onPublishTap` 把文案复制到剪贴板 + 引导用户到发布页长按正文「粘贴」补回(手动粘贴不走被清空的接口通道)。旧 `openXhsDeeplink`(内部能力,官方不对外)已移除;小程序改动需在小红书/微信 IDE 真机预览自测
 - `/materials/upload-video` 仍是占位页
 - 项目渠道二维码读取 `property_channels`；新建项目自动生成三条渠道（游客/用户/中介），但仍没有后续增删改渠道的管理入口
 
@@ -366,8 +366,9 @@ xhs-miniprogram/utils/xhsPublish.js
 - 从 query 获取 `projectId` + `channel`（或中间页直接传入的完整 `apiUrl`，已带 `?channel=`）；缺 `apiUrl` 时用 `projectId`+`channel` 拼 `/preview?channel=`，`channel` 缺省 `visitor`
 - 两段式请求：先 `GET /preview` 拿随机图立即展示，再 `GET /caption`（由 `apiUrl` 的 `/preview` 替换为 `/caption`）异步拿文案；文案未回前卡片显示「AI 文案生成中…」占位，复制/发布按钮禁用
 - 展示图片、文案、话题；「换一批」重新拉两段，靠 `loadSeq` 序号丢弃上一批过期文案
-- footer 用小红书内置 `<post-note-button>` 组件(`type=default`/`size=large`),入参由 `buildPublishProps(draft)` 派生:图片→`media-info`、标题截断≤20、正文截断≤1000、话题逗号拼接;点击即带图文原生跳小红书发布页,校验失败走 `onPublishError` 弹窗
-- 示例模式(demo,无参冷启动)与文案生成中不渲染组件,改用普通/禁用按钮;`openXhsDeeplink` 及存相册/剪贴板半自动流程已移除
+- footer 用小红书内置 `<post-note-button>` 组件(`type=default`/`size=large`),入参由 `buildPublishProps(draft)` 派生:图片→`media-info`、标题截断≤20、正文截断≤1000、话题逗号拼接;点击即带图原生跳小红书发布页,校验失败走 `onPublishError` 弹窗
+- **文案兜底(剪贴板粘贴)**:经组件带过去的标题/正文会被小红书 AI 笔记治理清空(图片不受影响,已诊断坐实为 App 接口层清空、非本地 bug),故 `onPublishTap` 在点击瞬间把文案(标题+正文+`#话题`,`captionForClipboard()`)复制到剪贴板,按钮上方常驻引导「跳转后请在正文长按『粘贴』补上文案」;用户手动粘贴的文字不走被清空的接口通道。顶部「复制」按钮为同一份文案的手动兜底
+- 示例模式(demo,无参冷启动)与文案生成中不渲染组件,改用普通/禁用按钮;`openXhsDeeplink` 及存相册半自动流程已移除
 
 小红书 AppID 需要在小红书小程序平台创建小程序后获得：
 

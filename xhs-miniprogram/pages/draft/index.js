@@ -234,22 +234,6 @@ Page({
   publishDataFrom(draft) {
     const props = buildPublishProps(draft);
 
-    // 诊断①:打印真正绑给组件的入参。若这里 finalContent 非空且正确,而真机发出去
-    // 却没文案 → 说明文案在小程序侧是完整带上的,是小红书 App 侧的 AI 笔记治理清空了,
-    // 非本地数据/绑定问题。若这里就空 → 是本地问题(文案没生成/被截没),可修。
-    console.log("[XHS发布] 诊断① 组件入参", {
-      rawTitle: draft.title,
-      rawTitleLen: (draft.title || "").length,
-      finalTitle: props.title,
-      finalTitleLen: props.title.length,
-      rawBodyLen: (draft.body || "").length,
-      finalContent: props.content,
-      finalContentLen: props.content.length,
-      tags: props.tags,
-      imageCount: (draft.selectedImages || []).length,
-      mediaInfo: props.mediaInfo,
-    });
-
     return {
       mediaInfo: props.mediaInfo,
       publishContent: props.content,
@@ -302,13 +286,37 @@ Page({
     });
   },
 
+  // 复制完整文案(标题 + 正文 + #话题)到剪贴板,供用户在小红书发布页手动粘贴。
   async copyCaption() {
-    if (this.data.captionLoading || !this.data.draft || !this.data.draft.caption) {
+    if (this.data.captionLoading) {
       return;
     }
 
-    await setClipboardData(this.data.draft.caption);
+    const text = this.captionForClipboard();
+
+    if (!text) {
+      return;
+    }
+
+    await setClipboardData(text);
     showToast("文案已复制", "success");
+  },
+
+  // 拼出用于粘贴的完整文案:标题、正文、#话题 各占一段。
+  captionForClipboard() {
+    const draft = this.data.draft;
+
+    if (!draft) {
+      return "";
+    }
+
+    const tags = (draft.tags || [])
+      .map((tag) => String(tag || "").trim())
+      .filter(Boolean)
+      .map((tag) => `#${tag}`)
+      .join(" ");
+
+    return [draft.title, draft.body, tags].filter(Boolean).join("\n\n");
   },
 
   // 示例模式:post-note-button 需要 https 公网图 + 会真的跳发布页,示例图是本地资源、
@@ -322,28 +330,25 @@ Page({
     });
   },
 
-  // 诊断②:点击组件那一刻,打印此刻真正带出去的内容。若组件的 bindtap 在真机能触发,
-  // 这里能看到点击瞬间的 title/content;若这里 content 有值、发出去的笔记却没文案,
-  // 就坐实是小红书 App 侧治理清空(而非我们没带)。bindtap 若在真机不触发也没关系,
-  // 诊断① 的入参日志一样能说明问题。
+  // 点「发小红书」的瞬间,把文案复制到剪贴板。组件会原生跳到发布页并带上图片,但经接口
+  // 带过去的标题/正文会被小红书 AI 笔记治理清空(图片不受影响)。用户在发布页长按正文
+  // 「粘贴」即可补回文案——手动粘贴的文字不走被清空的接口通道,能留下来。
   onPublishTap() {
-    console.log("[XHS发布] 诊断② 点击发布,当前带出的内容", {
-      titleLen: (this.data.publishTitle || "").length,
-      title: this.data.publishTitle,
-      contentLen: (this.data.publishContent || "").length,
-      content: this.data.publishContent,
-      tags: this.data.publishTags,
-      mediaInfo: this.data.mediaInfo,
-    });
+    const text = this.captionForClipboard();
+
+    if (!text) {
+      return;
+    }
+
+    setClipboardData(text);
+    showToast("文案已复制,发布页长按正文粘贴");
   },
 
   // <post-note-button> 参数校验失败(标题/正文超长、media-info 不合法等)时触发。
   onPublishError(event) {
     const detail = (event && event.detail) || {};
 
-    // 诊断③:校验失败详情。若真机上文案带不过去其实是触发了 binderror(而非治理),
-    // 这里会打出具体 errMsg(比如某字段超限),据此就能判定是参数问题还是治理。
-    console.error("[XHS发布] 诊断③ binderror 校验失败", detail);
+    console.error("[XHS发布] post-note-button 校验失败", detail);
 
     showModal({
       content: detail.errMsg || "内容不符合发布要求,请点「换一批」重试。",

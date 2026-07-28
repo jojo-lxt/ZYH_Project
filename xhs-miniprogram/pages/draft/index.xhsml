@@ -38,8 +38,15 @@
 
     <button class="secondary-action" bindtap="refreshPreview" loading="{{refreshing}}">换一批</button>
 
+    <!-- 跳转后小红书会清空经接口带过去的 AI 文案(图片不受影响),点发布已把文案复制好,
+         引导用户到发布页长按正文粘贴补回 -->
+    <view xhs:if="{{!demo && !captionLoading}}" class="publish-hint">
+      跳转后请在正文长按「粘贴」补上文案(点发布已自动复制)
+    </view>
+
     <view class="footer">
-      <!-- 正常流程:文案就绪后用小红书原生「发小红书」组件,点击即带图文跳发布页 -->
+      <!-- 正常流程:文案就绪后用小红书原生「发小红书」组件,点击即带图跳发布页;文案经接口
+           会被治理清空,靠 onPublishTap 复制到剪贴板 + 用户手动粘贴补回 -->
       <post-note-button
         xhs:if="{{!demo && !captionLoading}}"
         style="width: 100%;"
