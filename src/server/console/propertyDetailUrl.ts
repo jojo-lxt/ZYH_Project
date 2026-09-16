@@ -26,7 +26,10 @@ function firstHeaderValue(value: string | null) {
  *
  * 返回不带结尾斜杠的基础地址,例如 "https://example.com"。
  */
-export function resolveDetailBaseUrl(request: Request) {
+export function resolveDetailBaseUrl(request: {
+  headers: Pick<Headers, "get">;
+  url?: string;
+}) {
   const configured = process.env.APP_BASE_URL?.trim();
   if (configured) {
     return stripTrailingSlashes(configured);
@@ -43,7 +46,11 @@ export function resolveDetailBaseUrl(request: Request) {
     return stripTrailingSlashes(`${proto}://${host}`);
   }
 
-  return stripTrailingSlashes(new URL(request.url).origin);
+  if (request.url) {
+    return stripTrailingSlashes(new URL(request.url).origin);
+  }
+
+  throw new Error("无法确定公开访问地址，请配置 APP_BASE_URL");
 }
 
 /**

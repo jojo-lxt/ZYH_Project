@@ -44,10 +44,10 @@ ${API_BASE_URL}/api/public/projects/${projectId}/preview?channel=${channel}
 H5 中间页的小红书跳转模板示例：
 
 ```bash
-NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsmini://draft?projectId={projectId}&channel={channel}&apiUrl={apiUrl}"
+NEXT_PUBLIC_XHS_MINI_PROGRAM_URL="xhsdiscover://miniapp/<小程序ID>/pages/draft/index?projectId={projectId}&channel={channel}&apiUrl={apiUrl}"
 ```
 
-这里的 URL 模板需要替换成小红书开放平台实际生成的小程序 URL Link。
+将 `<小程序ID>` 替换成开放平台的真实 ID，也可以使用平台提供的站外 URL Link，并按其规则携带项目和渠道参数。`xhsmini://draft` 不是可直接使用的官方地址。项目扫码中间页在服务端生成原生链接，点击不依赖前端 JavaScript；修改 `NEXT_PUBLIC_*` 后仍需重新构建并重启网站。
 
 ## 发布(post-note-button 原生组件)
 

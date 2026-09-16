@@ -554,9 +554,10 @@ DATABASE_URL 是后端服务连接 PostgreSQL 的地址。
 AUTH_COOKIE_SECURE 控制登录 session cookie 是否只允许 HTTPS。正式环境应保持 true；如果临时用 http://<服务器公网IP>:3000 测试登录，可短暂设为 false，测试完成后再改回 true 并重启 PM2。
 APP_BASE_URL 是新建项目时自动生成的渠道二维码 / NFC 链接使用的基础域名，例如 https://your-domain.com。运行时读取，改了只需 pm2 restart content-publisher-console --update-env，不用 rebuild；不配置时会回退用请求来源域名（Nginx 反代下取 X-Forwarded-Host / X-Forwarded-Proto）。
 NEXT_PUBLIC_XHS_MINI_PROGRAM_URL / NEXT_PUBLIC_WECHAT_MINI_PROGRAM_URL 是扫码中间页跳转小红书 / 微信小程序的链接模板,填小红书 / 微信开放平台生成的实际 URL Link / Scheme。**模板必须带上三个占位符** {projectId}、{channel}、{apiUrl},中间页会把它们替换成实际值,例如:
-    xhsmini://draft?projectId={projectId}&channel={channel}&apiUrl={apiUrl}
+    xhsdiscover://miniapp/<小程序ID>/pages/draft/index?projectId={projectId}&channel={channel}&apiUrl={apiUrl}
 其中 apiUrl 是中间页拼好的完整预览接口地址(已带 ?channel=,小程序优先用它);projectId / channel 供小程序拼发布接口或在缺 apiUrl 时兜底。真实平台链接不是普通可拼接的 URL,只能靠占位符把参数放到位;若你填的是普通可解析 URL,中间页也会自动把 projectId/channel/apiUrl 作为查询参数拼上。缺了这些,小程序拿不到项目和渠道,预览会退化成默认渠道(visitor)甚至拉不到项目。
 提醒:这两个是 NEXT_PUBLIC_ 变量,编译期就烤进前端包,改了必须重新 pnpm build + 重启才生效(单独 pm2 restart 或加 --update-env 都不行)。
+项目扫码中间页会在服务端生成原生跳转链接，因此即使手机未能运行前端脚本也可以点击。未配置或无效的入口会直接显示“暂未开放”。小程序收到的 apiUrl 优先使用 APP_BASE_URL（正式环境应设为 https://<你的域名>），未配置才回退请求来源。小红书示例中的 <小程序ID> 必须替换为开放平台的真实 ID；xhsmini://draft 不是可直接使用的官方地址。
 LLM_BASE_URL / LLM_API_KEY / LLM_MODEL 是「扫码预览」生成种草文案用的国内大模型,走 OpenAI 兼容的 /chat/completions 接口,换厂商只改这几个变量(可选 LLM_TIMEOUT_MS 默认 20000 毫秒;可选 LLM_THINKING=disabled 关思考)。腾讯云上优先考虑腾讯混元(同云内网最稳),或 DeepSeek(便宜简单)。注意:`deepseek-chat` / `deepseek-reasoner` 已于 2026-07-24 弃用,DeepSeek 现用 `deepseek-v4-flash`(或 `-pro`);V4 是混合思考模型,默认可能开思考——文案任务不需要推理,务必 `LLM_THINKING=disabled` 关掉,否则思考既拖慢响应、又吃掉 `max_tokens` 预算把 JSON 写截断(表现为兜底、`captionReason=truncated`)。不配置或调用失败时会用项目卖点/标签拼一段兜底文案,预览页不会空。想知道线上文案有没有真走 AI:看 `/caption` 响应里的 `captionSource`(`ai`=大模型;`fallback`=兜底,`captionReason` 给原因码如 `not_configured`/`parse_error`/`truncated`/`network_error`/`http_xxx`/`timeout`),不用翻服务器日志。注:AI 文案已从 `/preview` 拆到独立的 `/caption` 接口(小程序先秒显图片、再异步拉文案)。
 ```
 

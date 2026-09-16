@@ -487,6 +487,8 @@ AUTH_COOKIE_SECURE="true"
 
 相关代码:`propertyDetailUrl.ts`(`buildProjectScanUrl`)、`consoleRepository.createProperty`、公开页 `src/app/p/[projectId]/page.tsx` + `ProjectPreviewBridge`。已有项目不会自动补渠道,需要时用 SQL 手动插入。
 
+项目扫码中间页的 `ProjectPreviewBridge` 是 Server Component：路由使用 `await headers()` 和 `resolveDetailBaseUrl` 确定公开基础地址，服务端拼好带 `projectId` / `channel` / `apiUrl` 的原生 `<a href>`。打开平台不依赖 React hydration（给静态 HTML 绑定事件的过程）或 `window.location.assign`，脚本加载失败时也能点击；空白、无效或不支持的协议显示“暂未开放”，不再等待点击后弹提示。支持 HTTP(S)、小红书 `xhsdiscover:` 和微信 `weixin:`；平台环境变量仍使用 `NEXT_PUBLIC_*_MINI_PROGRAM_URL`，修改后需要重新构建。此改动不代表所有旧版 Safari 都支持后台功能，也不能绕过浏览器的 App 唤起限制。
+
 ## 给后续 AI 的建议
 
 开始新对话后建议先读：

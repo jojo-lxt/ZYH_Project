@@ -1,4 +1,6 @@
+import { headers } from "next/headers";
 import { ProjectPreviewBridge } from "@/features/public/ProjectPreviewBridge";
+import { resolveDetailBaseUrl } from "@/server/console/propertyDetailUrl";
 import { parseChannel } from "@/shared/channels";
 
 // 公开扫码中间页(不在 (console) 登录态内):二维码/NFC 指向 /p/<项目id>?channel=<身份>,
@@ -14,6 +16,7 @@ export default async function ProjectScanPage({
 }) {
   const { projectId } = await params;
   const { channel } = await searchParams;
+  const baseUrl = resolveDetailBaseUrl({ headers: await headers() });
 
-  return <ProjectPreviewBridge channel={parseChannel(channel)} projectId={projectId} />;
+  return <ProjectPreviewBridge baseUrl={baseUrl} channel={parseChannel(channel)} projectId={projectId} />;
 }
